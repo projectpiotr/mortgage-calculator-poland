@@ -1,0 +1,281 @@
+/* Main content wrapper */
+.content-area {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* KPI Summary Cards Grid */
+.metrics-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.metric-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: var(--transition-normal);
+}
+
+.metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.metric-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.metric-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.metric-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+}
+
+.metric-icon.blue {
+    background-color: var(--color-accent-light);
+    color: var(--color-accent);
+}
+
+.metric-icon.green {
+    background-color: var(--color-success-light);
+    color: var(--color-success);
+}
+
+.metric-icon.red {
+    background-color: var(--color-danger-light);
+    color: var(--color-danger);
+}
+
+.metric-value {
+    font-size: 1.375rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    line-height: 1.2;
+}
+
+.metric-sub {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin-top: 0.25rem;
+}
+
+/* Progress bar for Capital vs Interest */
+.ratio-container {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-md);
+}
+
+.ratio-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 1rem;
+}
+
+.ratio-title-wrap {
+    display: flex;
+    flex-direction: column;
+}
+
+.ratio-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.ratio-sub {
+    font-size: 0.8125rem;
+    color: var(--color-text-light);
+    margin-top: 0.125rem;
+}
+
+.ratio-value-total {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--color-primary);
+}
+
+/* The actual Progress Bar representing Capital/Interest ratio */
+.ratio-progress-bar-wrapper {
+    height: 36px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    display: flex;
+    background-color: var(--color-border);
+    position: relative;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.ratio-progress-bar-part {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-white);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    transition: width 0.5s ease-in-out;
+    position: relative;
+}
+
+.ratio-progress-bar-part.capital {
+    background-color: var(--color-primary-light);
+}
+
+.ratio-progress-bar-part.interest {
+    background-color: var(--color-danger);
+}
+
+.ratio-details-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.ratio-details-label.capital {
+    color: var(--color-primary-light);
+}
+
+.ratio-details-label.interest {
+    color: var(--color-danger-text);
+}
+
+/* Badges section (Z nadpłatami) */
+.badges-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-full);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    box-shadow: var(--shadow-sm);
+}
+
+.badge-pill.teal {
+    background-color: var(--color-success-light);
+    color: var(--color-success-text);
+    border: 1px solid rgba(5, 150, 105, 0.15);
+}
+
+.badge-pill.blue {
+    background-color: var(--color-accent-light);
+    color: var(--color-accent);
+    border: 1px solid rgba(37, 99, 235, 0.15);
+}
+
+.badge-pill.slate {
+    background-color: var(--color-bg);
+    color: var(--color-primary-light);
+    border: 1px solid var(--color-border);
+}
+
+/* Charts Containers */
+.charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.chart-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-md);
+}
+
+.chart-container {
+    position: relative;
+    height: 320px;
+    width: 100%;
+}
+
+/* Next instalment UI Box */
+.next-instalment-box {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-md);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.next-instalment-title-area {
+    display: flex;
+    flex-direction: column;
+}
+
+.next-instalment-title-area h3 {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--color-primary);
+}
+
+.next-instalment-title-area p {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    margin-top: 0.125rem;
+}
+
+.next-instalment-value-area {
+    text-align: right;
+}
+
+.next-instalment-val {
+    font-size: 1.875rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    line-height: 1.1;
+}
+
+.next-instalment-overpayment-badge {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-accent);
+    margin-top: 0.25rem;
+}

@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalkulator Kredytu Hipotecznego - Nadpłaty & Symulacja</title>
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/calculator.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/schedule.css">
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <div class="container">
+        
+        <!-- HEADER SECTION -->
+        <header class="header">
+            <div class="header-title-area">
+                <h1>Kalkulator Kredytu Hipotecznego</h1>
+                <p>Precyzyjna symulacja spłaty kredytu z uwzględnieniem harmonogramu nadpłat</p>
+            </div>
+            
+            <!-- WIBOR Live Sync Badge -->
+            <div class="wibor-status-badge" id="wibor-sync-badge">
+                <span class="wibor-status-dot" id="wibor-status-dot"></span>
+                <span id="wibor-status-text">Pobieranie stawek WIBOR...</span>
+            </div>
+        </header>
+        
+        <!-- MAIN DASHBOARD -->
+        <div class="dashboard-grid">
+            
+            <!-- LEFT COLUMN: SIDEBAR CONFIGURATION -->
+            <aside class="content-area">
+                
+                <!-- 1. Loan Parameters Card -->
+                <section class="card">
+                    <h2 class="card-title">
+                        <!-- Icon Parameter -->
+                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                        Parametry kredytu
+                    </h2>
+                    
+                    <div class="form-group">
+                        <label class="form-label has-tooltip" data-tooltip="Aktualna kwota pozostała do spłaty na rzecz banku (bez odsetek).">
+                            Kapitał pozostały do spłaty
+                        </label>
+                        <div class="input-container">
+                            <input type="number" id="principal" class="input-field input-field-has-suffix" step="1000" min="0">
+                            <span class="input-suffix">PLN</span>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Rodzaj oprocentowania</label>
+                        <div class="segmented-control" id="interest-type-selector">
+                            <button type="button" id="interest-type-variable" class="segmented-control-btn active">Zmienne</button>
+                            <button type="button" id="interest-type-fixed" class="segmented-control-btn">Stałe</button>
+                        </div>
+                    </div>
+                    
+                    <div id="variable-rate-fields">
+                        <div class="form-group">
+                            <label class="form-label has-tooltip" data-tooltip="Stała marża banku dodawana do stawki WIBOR, określona w umowie kredytowej.">
+                                Marża banku
+                            </label>
+                            <div class="input-container">
+                                <input type="number" id="margin" class="input-field input-field-has-suffix" step="0.01" min="0">
+                                <span class="input-suffix">%</span>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Termin WIBOR</label>
+                            <div class="wibor-selector" id="wibor-term-selector">
+                                <button type="button" class="wibor-btn" data-term="1M">1M</button>
+                                <button type="button" class="wibor-btn" data-term="3M">3M</button>
+                                <button type="button" class="wibor-btn" data-term="6M">6M</button>
+                                <button type="button" class="wibor-btn" data-term="custom">Własny</button>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label has-tooltip" data-tooltip="Roczna stopa procentowa referencyjna. Pobierana automatycznie lub edytowana ręcznie.">
+                                Stawka WIBOR
+                            </label>
+                            <div class="input-container">
+                                <input type="number" id="wibor-value" class="input-field input-field-has-suffix" step="0.01" min="0" readonly>
+                                <span class="input-suffix">%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="fixed-rate-fields" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label has-tooltip" data-tooltip="Całkowite roczne oprocentowanie stałe kredytu (nie zmienia się przez ustalony w umowie czas spłaty).">
+                                Oprocentowanie stałe
+                            </label>
+                            <div class="input-container">
+                                <input type="number" id="fixed-rate" class="input-field input-field-has-suffix" step="0.01" min="0">
+                                <span class="input-suffix">%</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- 2. Loan Duration Card -->
+                <section class="card">
+                    <h2 class="card-title">
+                        <!-- Icon Calendar -->
+                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        Czas trwania
+                    </h2>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Określ okres spłaty przez</label>
+                        <select id="duration-mode" class="input-field">
+                            <option value="months">Liczbę pozostałych rat</option>
+                            <option value="date">Datę ostatniej raty</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Data pierwszej raty symulacji</label>
+                        <input type="month" id="start-month" class="input-field">
+                    </div>
+                    
+                    <div class="form-group" id="months-input-group">
+                        <label class="form-label has-tooltip" data-tooltip="Liczba rat pozostałych do spłaty według aktualnego harmonogramu banku.">
+                            Pozostało rat (w miesiącach)
+                        </label>
+                        <input type="number" id="months-remaining" class="input-field" min="1" max="600">
+                    </div>
+                    
+                    <div class="form-group" id="end-date-input-group" style="display: none;">
+                        <label class="form-label has-tooltip" data-tooltip="Przewidywana data zapłaty ostatniej raty (przeglądana z harmonogramu).">
+                            Miesiąc ostatniej raty
+                        </label>
+                        <input type="month" id="end-date" class="input-field">
+                    </div>
+                </section>
+                
+                <!-- 3. Overpayments Configuration Card -->
+                <section class="card">
+                    <h2 class="card-title">
+                        <!-- Icon Trending Up -->
+                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                        Konfiguracja nadpłat
+                    </h2>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Typ nadpłaty</label>
+                        <div class="segmented-control">
+                            <button type="button" id="recurrence-monthly" class="segmented-control-btn active">Miesięcznie</button>
+                            <button type="button" id="recurrence-single" class="segmented-control-btn">Jednorazowo</button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label has-tooltip" data-tooltip="Kwota, którą będziesz co miesiąc nadpłacać ponad standardową ratę.">
+                            Stała kwota nadpłaty
+                        </label>
+                        <div class="number-spinner-container">
+                            <button type="button" class="spinner-btn" id="btn-minus-overpayment">−</button>
+                            <div class="input-container" style="flex: 1;">
+                                <input type="number" id="overpayment-base" class="input-field input-field-has-suffix" min="0" step="100">
+                                <span class="input-suffix">PLN</span>
+                            </div>
+                            <button type="button" class="spinner-btn" id="btn-plus-overpayment">+</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Impact toggles -->
+                    <div class="toggle-group">
+                        <div class="toggle-item">
+                            <div class="toggle-label-wrap">
+                                <span class="toggle-title has-tooltip" data-tooltip="Nadpłata zmniejszy kwotę kolejnych rat, zachowując pierwotny okres kredytowania.">
+                                    Nadpłata obniża ratę
+                                </span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="impact-instalment">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div class="toggle-item">
+                            <div class="toggle-label-wrap">
+                                <span class="toggle-title has-tooltip" data-tooltip="Nadpłata skróci czas trwania kredytu, utrzymując wysokość raty na stałym poziomie (Zalecane).">
+                                    Nadpłata zmniejsza ilość rat
+                                </span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="impact-duration" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- List of custom single overpayments -->
+                    <div class="form-group" style="margin-top: 1.25rem;">
+                        <label class="form-label">Harmonogram nadpłat jednorazowych</label>
+                        <div id="custom-overpayments-list" class="custom-overpayments-list">
+                            <!-- Injected dynamically -->
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem;">
+                        <button type="button" class="btn-primary" id="btn-add-custom-overpayment">
+                            <!-- Money Icon -->
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Dodatkowa nadpłata
+                        </button>
+                        
+                        <button type="button" class="btn-secondary" id="btn-reset-form">
+                            Zresetuj formularz
+                        </button>
+                    </div>
+                </section>
+                
+            </aside>
+            
+            <!-- RIGHT COLUMN: RESULTS & DASHBOARD -->
+            <main class="content-area">
+                
+                <!-- PLACEHOLDER WARNING BOX (Visible when inputs are missing) -->
+                <div id="calculator-placeholder-warning" class="card" style="display: none; border-left: 4px solid var(--color-warning); background-color: var(--color-warning-light); margin-bottom: 0;">
+                    <div style="display: flex; gap: 1rem; align-items: flex-start;">
+                        <svg width="24" height="24" fill="none" stroke="var(--color-warning-text)" stroke-width="2" viewBox="0 0 24 24" style="margin-top: 0.25rem; flex-shrink: 0;">
+                            <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                        <div>
+                            <h3 style="color: var(--color-warning-text); font-weight: 700; margin-bottom: 0.5rem; font-size: 1.125rem; border: none; padding: 0;">Wymagane parametry do kalkulacji</h3>
+                            <p style="color: var(--color-text-main); font-size: 0.875rem; margin-bottom: 1rem;">
+                                Aby wygenerować harmonogram spłat i obliczyć oszczędności z nadpłat, prosimy o uzupełnienie brakujących informacji w lewym panelu:
+                            </p>
+                            <ul id="warning-missing-list" style="margin-left: 1.25rem; font-size: 0.875rem; color: var(--color-text-main); display: flex; flex-direction: column; gap: 0.375rem; list-style-type: square;">
+                                <!-- Injected dynamically -->
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="calculator-results-wrapper" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                    <!-- Summary Section (Kapitał vs Odsetki ratio + progress) -->
+                    <section class="ratio-container">
+                    <div class="ratio-header">
+                        <div class="ratio-title-wrap">
+                            <span class="ratio-title">Pozostało do spłaty (z odsetkami)</span>
+                            <span class="ratio-sub">Nadpłacając 2.000,00 PLN</span>
+                        </div>
+                        <div class="ratio-value-total" id="kpi-total-to-pay">0,00 PLN</div>
+                    </div>
+                    
+                    <!-- Double progress bar -->
+                    <div class="ratio-progress-bar-wrapper">
+                        <div class="ratio-progress-bar-part capital" id="bar-capital" style="width: 50%;">
+                            <span id="bar-capital-pct">50%</span>
+                        </div>
+                        <div class="ratio-progress-bar-part interest" id="bar-interest" style="width: 50%;">
+                            <span id="bar-interest-pct">50%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="ratio-details-row">
+                        <span class="ratio-details-label capital">
+                            Kapitał: <span id="kpi-capital-part">0,00 PLN</span>
+                        </span>
+                        <span class="ratio-details-label interest">
+                            Odsetki: <span id="kpi-interest-part">0,00 PLN</span>
+                        </span>
+                    </div>
+                </section>
+                
+                <!-- Z nadpłatami KPI pills -->
+                <section class="card" style="padding: 1.25rem;">
+                    <h3 class="form-label" style="font-size: 0.8125rem; text-transform: uppercase; margin-bottom: 0.75rem;">Podsumowanie z nadpłatami</h3>
+                    
+                    <div class="badges-container">
+                        <!-- End Date Badges -->
+                        <div class="badge-pill teal">
+                            <!-- Icon Calendar -->
+                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            Koniec: <span id="kpi-end-date">Brak spłaty</span>
+                        </div>
+                        
+                        <!-- Remaining months -->
+                        <div class="badge-pill teal">
+                            <!-- Icon Clock -->
+                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Pozostało: <span id="kpi-remaining-months">0</span> rat <span id="kpi-remaining-years-text"></span>
+                        </div>
+                        
+                        <!-- Savings -->
+                        <div class="badge-pill teal">
+                            <!-- Icon Coins -->
+                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Zaoczkędzone odsetki: <span id="kpi-savings-amount">0,00 PLN</span> (<span id="kpi-savings-percent">0%</span>)
+                        </div>
+                        
+                        <!-- Sum overpayments -->
+                        <div class="badge-pill blue">
+                            <!-- Icon Card -->
+                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                            Suma nadpłat: <span id="kpi-overpayments-sum">0,00 PLN</span>
+                        </div>
+                        
+                        <!-- Months Saved -->
+                        <div class="badge-pill blue">
+                            <!-- Icon Refresh/Undo -->
+                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H17"></path></svg>
+                            Krócej o: <span id="kpi-months-saved">0</span> rat
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Next Instalment display box -->
+                <section class="next-instalment-box">
+                    <div class="next-instalment-title-area">
+                        <h3>Kolejna rata kredytu</h3>
+                        <p id="next-instalment-date">Brak harmonogramu</p>
+                    </div>
+                    <div class="next-instalment-value-area">
+                        <div class="next-instalment-val" id="next-instalment-val">0,00 PLN</div>
+                        <div class="next-instalment-overpayment-badge" id="next-instalment-overpayment">+ 0,00 PLN nadpłaty</div>
+                    </div>
+                </section>
+                
+                <!-- CHARTS GRID -->
+                <div class="charts-grid">
+                    
+                    <article class="chart-card">
+                        <h3 class="form-label" style="margin-bottom: 1rem;">Harmonogram spłaty rocznej (kapitał vs. odsetki vs. nadpłaty)</h3>
+                        <div class="chart-container">
+                            <canvas id="chart-yearly-cost"></canvas>
+                        </div>
+                    </article>
+                    
+                    <article class="chart-card">
+                        <h3 class="form-label" style="margin-bottom: 1rem;">Tempo spłaty kapitału kredytu</h3>
+                        <div class="chart-container">
+                            <canvas id="chart-loan-balance"></canvas>
+                        </div>
+                    </article>
+                    
+                </div>
+                
+                <!-- AMORTIZATION TABLE (Harmonogram) -->
+                <section class="schedule-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.75rem;">
+                        <h2 class="card-title" style="margin-bottom: 0; border: none; padding-bottom: 0;">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                            Harmonogram szczegółowy
+                        </h2>
+                        
+                        <!-- CSV Export -->
+                        <button type="button" class="btn-secondary" id="btn-export-csv" style="width: auto; padding: 0.5rem 1rem; font-size: 0.8125rem;">
+                            Eksportuj do CSV
+                        </button>
+                    </div>
+                    
+                    <div class="table-responsive-wrapper">
+                        <table class="schedule-table">
+                            <thead>
+                                <tr>
+                                    <th>Nr</th>
+                                    <th>Miesiąc</th>
+                                    <th>Kapitał</th>
+                                    <th>Odsetki</th>
+                                    <th>Rata</th>
+                                    <th>Nadpłata</th>
+                                    <th>Suma kosztów</th>
+                                </tr>
+                            </thead>
+                            <tbody id="schedule-table-body">
+                                <!-- Injected dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Table Pagination & Page Size -->
+                    <div class="pagination-controls">
+                        <div class="page-size-selector">
+                            <span>Pokaż wiersze:</span>
+                            <select id="page-size-select">
+                                <option value="12" selected>12 miesięcy (rok)</option>
+                                <option value="24">24 miesiące (2 lata)</option>
+                                <option value="60">60 miesięcy (5 lat)</option>
+                                <option value="120">120 miesięcy (10 lat)</option>
+                                <option value="9999">Wszystkie</option>
+                            </select>
+                        </div>
+                        
+                        <div class="pagination-navigation">
+                            <button type="button" class="pagination-btn" id="btn-prev-page" title="Poprzednia strona">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"></path></svg>
+                            </button>
+                            <span class="pagination-info" id="page-info-text">0-0 z 0</span>
+                            <button type="button" class="pagination-btn" id="btn-next-page" title="Następna strona">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+                </div>
+            </main>
+            
+        </div>
+        
+    </div>
+
+    <!-- MODAL WINDOW FOR CUSTOM SINGLE OVERPAYMENTS -->
+    <div class="modal-overlay" id="modal-overpayment">
+        <div class="modal-content">
+            <header class="modal-header">
+                <h3 id="modal-title">Nadpłata w miesiącu</h3>
+                <button type="button" class="modal-close" id="modal-close">&times;</button>
+            </header>
+            
+            <div class="form-group">
+                <label class="form-label">Numer raty</label>
+                <input type="number" id="modal-month" class="input-field" readonly>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Kwota nadpłaty jednorazowej</label>
+                <div class="input-container">
+                    <input type="number" id="modal-amount" class="input-field input-field-has-suffix" min="0" step="500">
+                    <span class="input-suffix">PLN</span>
+                </div>
+                <p style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 0.25rem;">Wprowadź 0, aby usunąć nadpłatę z tego miesiąca.</p>
+            </div>
+            
+            <footer class="modal-buttons">
+                <button type="button" class="btn-secondary" id="modal-cancel" style="flex: 1;">Anuluj</button>
+                <button type="button" class="btn-primary" id="modal-submit" style="flex: 1;">Zapisz</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Javascript logic -->
+    <script src="js/app.js"></script>
+</body>
+</html>

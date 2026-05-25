@@ -1,0 +1,228 @@
+.schedule-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-md);
+    margin-top: 1.5rem;
+}
+
+.table-responsive-wrapper {
+    overflow-x: auto;
+    width: 100%;
+    margin-top: 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+}
+
+.schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 0.875rem;
+}
+
+.schedule-table th {
+    background-color: var(--color-bg);
+    color: var(--color-text-muted);
+    font-weight: 600;
+    padding: 0.75rem 1rem;
+    border-bottom: 2px solid var(--color-border);
+    white-space: nowrap;
+}
+
+.schedule-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+    color: var(--color-text-main);
+    white-space: nowrap;
+}
+
+.schedule-table tbody tr:hover {
+    background-color: var(--color-accent-light);
+}
+
+/* Zebra striping */
+.schedule-table tbody tr:nth-child(even) {
+    background-color: #FAFBFD;
+}
+
+/* Table Badge styles */
+.table-badge {
+    display: inline-block;
+    padding: 0.25rem 0.625rem;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.table-badge.interest {
+    background-color: var(--color-danger-light);
+    color: var(--color-danger-text);
+}
+
+.table-badge.overpayment {
+    background-color: var(--color-success-light);
+    color: var(--color-success-text);
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.table-badge.overpayment:hover {
+    background-color: #D1FAE5;
+    transform: scale(1.05);
+}
+
+.table-badge.cost {
+    background-color: var(--color-primary-light);
+    color: var(--color-text-white);
+}
+
+.table-badge.capital-badge {
+    background-color: var(--color-bg);
+    color: var(--color-primary-light);
+}
+
+/* Sum / Footer Row */
+.schedule-table tr.sum-row {
+    background-color: #E2E8F0 !important;
+    font-weight: 700;
+}
+
+.schedule-table tr.sum-row td {
+    border-top: 2px solid var(--color-text-light);
+    border-bottom: 2px solid var(--color-text-light);
+    color: var(--color-primary);
+}
+
+/* Pagination Controls */
+.pagination-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0 0 0;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+}
+
+.page-size-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.page-size-selector select {
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface);
+    color: var(--color-text-main);
+    outline: none;
+    cursor: pointer;
+}
+
+.pagination-navigation {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.pagination-btn {
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface);
+    color: var(--color-text-main);
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    outline: none;
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background-color: var(--color-bg);
+    border-color: var(--color-border-hover);
+    color: var(--color-accent);
+}
+
+.pagination-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.pagination-info {
+    font-weight: 500;
+}
+
+/* Modal form style for adding custom overpayments in a specific month */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+.modal-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.modal-content {
+    background-color: var(--color-surface);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: var(--shadow-lg);
+    transform: translateY(20px);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-overlay.active .modal-content {
+    transform: translateY(0);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 0.5rem;
+}
+
+.modal-header h3 {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--color-primary);
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    color: var(--color-text-muted);
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+}

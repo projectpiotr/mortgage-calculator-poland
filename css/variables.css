@@ -1,0 +1,54 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+    /* Color Palette */
+    --color-bg: #F8FAFC;
+    --color-surface: #FFFFFF;
+    --color-border: #E2E8F0;
+    --color-border-hover: #CBD5E1;
+    
+    /* Brand & Trust Colors */
+    --color-primary: #0F172A;       /* Deep Navy Slate */
+    --color-primary-light: #1E293B; /* Slate Blue */
+    --color-accent: #2563EB;        /* Trust Blue */
+    --color-accent-hover: #1D4ED8;  /* Darker Blue */
+    --color-accent-light: #EFF6FF;  /* Light Ice Blue */
+    
+    /* Indicator Colors */
+    --color-success: #059669;       /* Emerald Green (Savings, Capital) */
+    --color-success-light: #ECFDF5; /* Soft Green Background */
+    --color-success-text: #047857;
+    
+    --color-danger: #DC2626;        /* Coral/Crimson Red (Interest, Cost) */
+    --color-danger-light: #FEF2F2;  /* Soft Red Background */
+    --color-danger-text: #B91C1C;
+    
+    --color-warning: #D97706;       /* Amber/Orange */
+    --color-warning-light: #FFFBEB; /* Soft Amber Background */
+    --color-warning-text: #B45309;
+    
+    /* Text Colors */
+    --color-text-main: #1E293B;
+    --color-text-muted: #64748B;
+    --color-text-light: #94A3B8;
+    --color-text-white: #FFFFFF;
+    
+    /* Shadows & Effects */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.08);
+    --shadow-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    
+    /* Borders & Radius */
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-full: 9999px;
+    
+    /* Animation Transitions */
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* Typography */
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
