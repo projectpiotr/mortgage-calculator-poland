@@ -732,9 +732,109 @@ window.addEventListener('DOMContentLoaded', async () => {
     setDefaultValues();
     setupEventListeners();
     await handleWiborFetch();
+    loadStateFromLocalStorage();
     recalculate();
     initTooltips();
 });
+
+function saveStateToLocalStorage() {
+    try {
+        if (!els.principalInput) return;
+        const activeWiborBtn = els.wiborTermSelector.querySelector('.wibor-btn.active');
+        const wiborTerm = activeWiborBtn ? activeWiborBtn.getAttribute('data-term') : null;
+        
+        const data = {
+            principal: els.principalInput.value,
+            margin: els.marginInput.value,
+            wibor: els.wiborInput.value,
+            fixedRate: els.fixedRateInput.value,
+            startMonth: els.startMonthInput.value,
+            durationMode: els.durationModeSelect.value,
+            months: els.monthsInput.value,
+            endDate: els.endDateInput.value,
+            overpaymentBase: els.overpaymentBaseInput.value,
+            interestType: state.interestType,
+            overpaymentImpact: els.overpaymentImpactDuration.checked ? 'reduce_duration' : 'reduce_instalment',
+            recurrenceType: els.segmentedRecurrenceBase.classList.contains('active') ? 'monthly' : 'single',
+            customOverpayments: state.customOverpayments,
+            wiborTerm: wiborTerm
+        };
+        localStorage.setItem('mortgage_calculator_state', JSON.stringify(data));
+    } catch (e) {
+        console.error('Failed to save state to localStorage:', e);
+    }
+}
+
+function loadStateFromLocalStorage() {
+    const saved = localStorage.getItem('mortgage_calculator_state');
+    if (!saved) return false;
+    try {
+        const data = JSON.parse(saved);
+        
+        els.principalInput.value = data.principal || '';
+        els.marginInput.value = data.margin || '';
+        els.wiborInput.value = data.wibor || '';
+        els.fixedRateInput.value = data.fixedRate || '';
+        els.startMonthInput.value = data.startMonth || '2026-06';
+        els.durationModeSelect.value = data.durationMode || 'months';
+        els.monthsInput.value = data.months || '';
+        els.endDateInput.value = data.endDate || '';
+        els.overpaymentBaseInput.value = data.overpaymentBase || '';
+        
+        state.interestType = data.interestType || 'variable';
+        if (state.interestType === 'fixed') {
+            els.interestTypeFixed.classList.add('active');
+            els.interestTypeVariable.classList.remove('active');
+            els.fixedRateFields.style.display = 'block';
+            els.variableRateFields.style.display = 'none';
+        } else {
+            els.interestTypeVariable.classList.add('active');
+            els.interestTypeFixed.classList.remove('active');
+            els.variableRateFields.style.display = 'block';
+            els.fixedRateFields.style.display = 'none';
+        }
+        
+        if (els.durationModeSelect.value === 'months') {
+            els.monthsInputGroup.style.display = 'block';
+            els.endDateInputGroup.style.display = 'none';
+        } else {
+            els.monthsInputGroup.style.display = 'none';
+            els.endDateInputGroup.style.display = 'block';
+        }
+
+        if (data.overpaymentImpact === 'reduce_instalment') {
+            els.overpaymentImpactInstalment.checked = true;
+            els.overpaymentImpactDuration.checked = false;
+        } else {
+            els.overpaymentImpactDuration.checked = true;
+            els.overpaymentImpactInstalment.checked = false;
+        }
+        
+        if (data.recurrenceType === 'single') {
+            els.segmentedRecurrenceSingle.classList.add('active');
+            els.segmentedRecurrenceBase.classList.remove('active');
+            els.overpaymentBaseInput.setAttribute('disabled', 'true');
+        } else {
+            els.segmentedRecurrenceBase.classList.add('active');
+            els.segmentedRecurrenceSingle.classList.remove('active');
+            els.overpaymentBaseInput.removeAttribute('disabled');
+        }
+        
+        state.customOverpayments = data.customOverpayments || [];
+        renderCustomOverpaymentsList();
+        
+        els.wiborTermSelector.querySelectorAll('.wibor-btn').forEach(b => b.classList.remove('active'));
+        if (data.wiborTerm) {
+            const activeBtn = els.wiborTermSelector.querySelector(`.wibor-btn[data-term="${data.wiborTerm}"]`);
+            if (activeBtn) activeBtn.classList.add('active');
+        }
+        
+        return true;
+    } catch (e) {
+        console.error('Error loading state from localStorage:', e);
+        return false;
+    }
+}
 
 function setDefaultValues() {
     els.principalInput.value = '';
@@ -966,6 +1066,9 @@ function updateEndDateFromMonths() {
 }
 
 function recalculate() {
+    // Save current form state to LocalStorage
+    saveStateToLocalStorage();
+
     // 1. Gather missing / invalid inputs
     const missing = [];
     
@@ -974,14 +1077,31 @@ function recalculate() {
         missing.push("Kapitał pozostały do spłaty (musi być większy niż 0 PLN)");
     }
     
-    const margin = parseFloat(els.marginInput.value);
-    if (!els.marginInput.value || isNaN(margin) || margin < 0) {
-        missing.push("Marża banku (np. 2,35 %)");
-    }
+    let margin = 0;
+    let wibor = 0;
     
-    const wibor = parseFloat(els.wiborInput.value);
-    if (!els.wiborInput.value || isNaN(wibor) || wibor < 0) {
-        missing.push("Stawka WIBOR (wybierz okres 1M/3M/6M lub wpisz własną)");
+    if (state.interestType === 'fixed') {
+        const fixedRate = parseFloat(els.fixedRateInput.value);
+        if (!els.fixedRateInput.value || isNaN(fixedRate) || fixedRate <= 0) {
+            missing.push("Oprocentowanie stałe (musi być większe niż 0 %)");
+        } else {
+            wibor = fixedRate;
+            margin = 0;
+        }
+    } else {
+        const marginVal = parseFloat(els.marginInput.value);
+        if (!els.marginInput.value || isNaN(marginVal) || marginVal < 0) {
+            missing.push("Marża banku (np. 2,35 %)");
+        } else {
+            margin = marginVal;
+        }
+        
+        const wiborVal = parseFloat(els.wiborInput.value);
+        if (!els.wiborInput.value || isNaN(wiborVal) || wiborVal < 0) {
+            missing.push("Stawka WIBOR (wybierz okres 1M/3M/6M lub wpisz własną)");
+        } else {
+            wibor = wiborVal;
+        }
     }
     
     const isMonthsMode = els.durationModeSelect.value === 'months';
