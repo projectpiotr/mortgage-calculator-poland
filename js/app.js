@@ -743,6 +743,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         modalCancel: document.getElementById('modal-cancel'),
         modalSubmit: document.getElementById('modal-submit'),
         btnExportCsv: document.getElementById('btn-export-csv'),
+        btnExportWord: document.getElementById('btn-export-word'),
         warningBox: document.getElementById('calculator-placeholder-warning'),
         warningList: document.getElementById('warning-missing-list'),
         resultsWrapper: document.getElementById('calculator-results-wrapper'),
@@ -1145,6 +1146,7 @@ function setupEventListeners() {
     });
 
     els.btnExportCsv.addEventListener('click', exportScheduleToCsv);
+    els.btnExportWord.addEventListener('click', exportScheduleToWord);
 }
 
 function updateEndDateFromMonths() {
@@ -1451,4 +1453,502 @@ function exportScheduleToCsv() {
     link.click();
     document.body.removeChild(link);
     showToast('Wyeksportowano harmonogram do pliku CSV.', 'success');
+}
+
+function getCanvasPngBase64(canvasElement) {
+    if (!canvasElement) return '';
+    try {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvasElement.width;
+        tempCanvas.height = canvasElement.height;
+        const ctx = tempCanvas.getContext('2d');
+        
+        // Fill with white background to prevent transparent chart issues in MS Word
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        
+        // Draw the chart canvas on top
+        ctx.drawImage(canvasElement, 0, 0);
+        
+        // Get base64 string
+        const dataUrl = tempCanvas.toDataURL('image/png');
+        // Extract base64 part
+        return dataUrl.split(',')[1];
+    } catch (e) {
+        console.error('Error extracting canvas image:', e);
+        return '';
+    }
+}
+
+function exportScheduleToWord() {
+    const calc = state.activeCalculation;
+    if (!calc || !calc.overpaid.schedule.length) {
+        showToast('Brak danych do wyeksportowania.', 'warning');
+        return;
+    }
+    
+    const std = calc.standard;
+    const over = calc.overpaid;
+    const savings = calc.savings;
+    
+    // Retrieve values from inputs
+    const principal = parseFloat(els.principalInput.value) || 0;
+    const margin = parseFloat(els.marginInput.value) || 0;
+    const wibor = parseFloat(els.wiborInput.value) || 0;
+    const fixedRate = parseFloat(els.fixedRateInput.value) || 0;
+    const monthsRemaining = parseInt(els.monthsInput.value) || 0;
+    const monthlyOverpayment = parseFloat(els.overpaymentBaseInput.value) || 0;
+    const overpaymentImpact = els.overpaymentImpactDuration.checked ? 'reduce_duration' : 'reduce_instalment';
+    
+    const interestTypeLabel = state.interestType === 'fixed' ? 'Stałe' : 'Zmienne';
+    const rate = state.interestType === 'fixed' ? fixedRate : (margin + wibor);
+    
+    const activeWiborBtn = els.wiborTermSelector.querySelector('.wibor-btn.active');
+    const wiborTerm = activeWiborBtn ? activeWiborBtn.getAttribute('data-term') : '3M';
+    const wiborTermLabel = state.interestType === 'fixed' ? 'Stała stopa bazowa' : `WIBOR ${wiborTerm}`;
+    
+    // Generation timestamp
+    const generationDate = new Date().toLocaleString('pl-PL');
+    
+    // Overpayment text
+    const recurrenceType = els.segmentedRecurrenceBase.classList.contains('active') ? 'monthly' : 'single';
+    let overpaymentText = '';
+    if (recurrenceType === 'single') {
+        overpaymentText = `Tylko nadpłaty jednorazowe (${state.customOverpayments.length} szt.)`;
+    } else {
+        if (monthlyOverpayment > 0) {
+            const strategyText = overpaymentImpact === 'reduce_duration' ? 'skracanie okresu spłaty' : 'obniżanie raty';
+            overpaymentText = `Miesięcznie ${formatPLN(monthlyOverpayment)} (${strategyText})`;
+            if (state.customOverpayments.length > 0) {
+                overpaymentText += ` + ${state.customOverpayments.length} nadpłat jednorazowych`;
+            }
+        } else {
+            overpaymentText = 'Brak (harmonogram standardowy)';
+        }
+    }
+    
+    // Strategy description
+    const strategyDescription = overpaymentImpact === 'reduce_duration' 
+        ? 'Zmniejszenie liczby rat (skrócenie czasu spłaty przy zachowaniu wysokości raty)' 
+        : 'Obniżenie wysokości raty (przy zachowaniu pierwotnego czasu trwania kredytu)';
+        
+    // Standard End Date Label
+    const stdEndDateLabel = std.schedule.length > 0 
+        ? formatPolishMonth(std.schedule[std.schedule.length - 1].date)
+        : 'Brak';
+    
+    // Overpaid End Date Label
+    const overEndDateLabel = over.schedule.length > 0
+        ? formatPolishMonth(over.schedule[over.schedule.length - 1].date)
+        : 'Brak';
+        
+    // First 12 months preview rows
+    let scheduleRowsHtml = '';
+    const previewLimit = Math.min(12, over.schedule.length);
+    const previewSums = { capital: 0, interest: 0, instalment: 0, overpayment: 0, totalCost: 0 };
+    
+    for (let i = 0; i < previewLimit; i++) {
+        const row = over.schedule[i];
+        previewSums.capital += row.capitalPaid;
+        previewSums.interest += row.interestPaid;
+        previewSums.instalment += row.instalment;
+        previewSums.overpayment += row.overpayment;
+        previewSums.totalCost += row.totalCost;
+        
+        scheduleRowsHtml += `
+            <tr>
+                <td style="text-align: center;">${row.nr}</td>
+                <td>${row.monthLabel}</td>
+                <td>${formatPLN(row.capitalPaid)}</td>
+                <td>${formatPLN(row.interestPaid)}</td>
+                <td>${formatPLN(row.instalment)}</td>
+                <td style="${row.overpayment > 0 ? 'color: #047857; font-weight: bold;' : ''}">${row.overpayment > 0 ? formatPLN(row.overpayment) : '0,00 PLN'}</td>
+                <td><strong>${formatPLN(row.totalCost)}</strong></td>
+            </tr>
+        `;
+    }
+    
+    // Extract base64 images from canvas
+    const yearlyCostChartBase64 = getCanvasPngBase64(els.costCanvas);
+    const loanBalanceChartBase64 = getCanvasPngBase64(els.balanceCanvas);
+    
+    // Generate the HTML template for the Word doc
+    const htmlTemplate = `<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>Raport Kredytowy - Symulacja Nadpłat</title>
+<style>
+    body {
+        font-family: 'Calibri', 'Segoe UI', 'Arial', sans-serif;
+        color: #1E293B;
+        line-height: 1.5;
+        margin: 0;
+        padding: 0;
+    }
+    .cover-page {
+        padding: 30px;
+        text-align: center;
+        background-color: #F8FAFC;
+        border-bottom: 3px solid #2563EB;
+        margin-bottom: 20px;
+    }
+    .cover-title {
+        font-size: 24pt;
+        color: #0F172A;
+        font-weight: bold;
+        margin-top: 30px;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+    }
+    .cover-subtitle {
+        font-size: 13pt;
+        color: #475569;
+        margin-bottom: 30px;
+    }
+    .meta-table {
+        margin: 0 auto;
+        border-collapse: collapse;
+        width: 90%;
+        margin-top: 20px;
+        margin-bottom: 30px;
+    }
+    .meta-table td {
+        padding: 8px 10px;
+        border-bottom: 1px solid #E2E8F0;
+        font-size: 10.5pt;
+        text-align: left;
+    }
+    .meta-label {
+        font-weight: bold;
+        color: #475569;
+        width: 40%;
+    }
+    .meta-value {
+        color: #0F172A;
+    }
+    .section-title {
+        font-size: 15pt;
+        color: #1E293B;
+        border-bottom: 2px solid #E2E8F0;
+        padding-bottom: 5px;
+        margin-top: 25px;
+        margin-bottom: 12px;
+        font-weight: bold;
+    }
+    .kpi-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+        margin-bottom: 20px;
+    }
+    .kpi-cell {
+        width: 50%;
+        padding: 5px;
+    }
+    .kpi-card {
+        background-color: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        padding: 12px;
+        text-align: center;
+    }
+    .kpi-card.savings {
+        background-color: #ECFDF5;
+        border: 1px solid #A7F3D0;
+    }
+    .kpi-card.term {
+        background-color: #EFF6FF;
+        border: 1px solid #BFDBFE;
+    }
+    .kpi-value {
+        font-size: 16pt;
+        font-weight: bold;
+        color: #0F172A;
+        margin: 3px 0;
+    }
+    .kpi-card.savings .kpi-value {
+        color: #047857;
+    }
+    .kpi-card.term .kpi-value {
+        color: #1D4ED8;
+    }
+    .kpi-label {
+        font-size: 8.5pt;
+        color: #475569;
+        text-transform: uppercase;
+        font-weight: bold;
+    }
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+        font-size: 9.5pt;
+    }
+    .data-table th {
+        background-color: #1E293B;
+        color: #FFFFFF;
+        padding: 8px 10px;
+        text-align: left;
+        font-weight: bold;
+        border: 1px solid #1E293B;
+    }
+    .data-table td {
+        padding: 6px 8px;
+        border: 1px solid #E2E8F0;
+    }
+    .data-table tr:nth-child(even) {
+        background-color: #F8FAFC;
+    }
+    .data-table .sum-row {
+        font-weight: bold;
+        background-color: #F1F5F9 !important;
+        border-top: 2px solid #94A3B8;
+    }
+    .text-success {
+        color: #059669;
+        font-weight: bold;
+    }
+    .text-danger {
+        color: #DC2626;
+    }
+    .text-primary {
+        color: #2563EB;
+        font-weight: bold;
+    }
+    .chart-box {
+        text-align: center;
+        margin: 15px 0;
+        padding: 10px;
+        border: 1px solid #E2E8F0;
+        background-color: #FFFFFF;
+    }
+    .chart-image {
+        width: 580px;
+        height: auto;
+    }
+    .page-break {
+        page-break-before: always;
+    }
+</style>
+</head>
+<body>
+    <div class="cover-page">
+        <div style="font-size: 10.5pt; color: #2563EB; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px;">Kalkulator Kredytu Hipotecznego</div>
+        <div class="cover-title">Raport Symulacji Spłaty Kredytu</div>
+        <div class="cover-subtitle">Zestawienie korzyści finansowych z nadpłat kapitału</div>
+        
+        <table class="meta-table">
+            <tr>
+                <td class="meta-label">Data wygenerowania:</td>
+                <td class="meta-value">${generationDate}</td>
+            </tr>
+            <tr>
+                <td class="meta-label">Kapitał pozostały do spłaty:</td>
+                <td class="meta-value">${formatPLN(principal)}</td>
+            </tr>
+            <tr>
+                <td class="meta-label">Rodzaj oprocentowania:</td>
+                <td class="meta-value">${interestTypeLabel}</td>
+            </tr>
+            <tr>
+                <td class="meta-label">Aktualne oprocentowanie:</td>
+                <td class="meta-value">${rate.toFixed(2)} % (${state.interestType === 'fixed' ? 'stała stopa' : `marża ${margin.toFixed(2)}% + ${wiborTermLabel} ${wibor.toFixed(2)}%`})</td>
+            </tr>
+            <tr>
+                <td class="meta-label">Pozostały okres (bez nadpłat):</td>
+                <td class="meta-value">${monthsRemaining} rat (${Math.floor(monthsRemaining/12)} lat, ${monthsRemaining%12} mies.)</td>
+            </tr>
+            <tr>
+                <td class="meta-label">Deklarowane nadpłaty:</td>
+                <td class="meta-value">${overpaymentText}</td>
+            </tr>
+        </table>
+        
+        <div style="margin-top: 30px; font-size: 9.5pt; color: #64748B; line-height: 1.4;">
+            Dokument wygenerowany na potrzeby analizy własnej oraz prezentacji w banku lub u doradcy finansowego.<br>
+            Przedstawione wyliczenia mają charakter symulacyjny i opierają się na aktualnych danych rynkowych.
+        </div>
+    </div>
+    
+    <div class="page-break"></div>
+    
+    <div class="section-title">1. Porównanie Wariantów Spłaty</div>
+    <p style="font-size: 10pt; margin-bottom: 15px;">Zestawienie kosztów kredytu w wersji standardowej (bez nadpłat) oraz przy realizacji planowanych nadpłat.</p>
+    
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Parametr porównawczy</th>
+                <th>Kredyt Standardowy</th>
+                <th>Kredyt z Nadpłatami</th>
+                <th>Różnica (Oszczędność)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Suma spłaconego kapitału</strong></td>
+                <td>${formatPLN(std.totalCapital)}</td>
+                <td>${formatPLN(over.totalCapital)}</td>
+                <td>0,00 PLN</td>
+            </tr>
+            <tr>
+                <td><strong>Suma zapłaconych odsetek</strong></td>
+                <td class="text-danger">${formatPLN(std.totalInterest)}</td>
+                <td class="text-danger">${formatPLN(over.totalInterest)}</td>
+                <td class="text-success">${formatPLN(savings.interest)}</td>
+            </tr>
+            <tr>
+                <td><strong>Całkowity koszt spłaty</strong></td>
+                <td>${formatPLN(std.totalCost)}</td>
+                <td>${formatPLN(over.totalCost)}</td>
+                <td class="text-success">${formatPLN(savings.interest)}</td>
+            </tr>
+            <tr>
+                <td><strong>Rzeczywista liczba rat (okres spłaty)</strong></td>
+                <td>${std.duration} rat (${Math.floor(std.duration/12)} lat, ${std.duration%12} mies.)</td>
+                <td class="text-primary">${over.duration} rat (${Math.floor(over.duration/12)} lat, ${over.duration%12} mies.)</td>
+                <td class="text-success">Skrócenie o ${savings.months} rat (${savings.yearsSaved} lat, ${savings.monthsSavedRem} mies.)</td>
+            </tr>
+            <tr>
+                <td><strong>Przewidywana data zakończenia</strong></td>
+                <td>${stdEndDateLabel}</td>
+                <td class="text-primary">${overEndDateLabel}</td>
+                <td class="text-success">Szybciej o ${savings.months} mies.</td>
+            </tr>
+            <tr>
+                <td><strong>Suma zrealizowanych nadpłat</strong></td>
+                <td>0,00 PLN</td>
+                <td class="text-primary">${formatPLN(over.totalOverpayments)}</td>
+                <td>--</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <table class="kpi-table">
+        <tr>
+            <td class="kpi-cell">
+                <div class="kpi-card savings">
+                    <div class="kpi-label">Zaoszczędzone odsetki</div>
+                    <div class="kpi-value">${formatPLN(savings.interest)}</div>
+                    <div style="font-size: 9.5pt; color: #047857;">Suma kosztów odsetkowych mniejsza o ${savings.percent.toFixed(2)}%</div>
+                </div>
+            </td>
+            <td class="kpi-cell">
+                <div class="kpi-card term">
+                    <div class="kpi-label">Okres spłaty skrócony o</div>
+                    <div class="kpi-value">${savings.months} rat</div>
+                    <div style="font-size: 9.5pt; color: #1D4ED8;">Spłata szybsza o ${savings.yearsSaved} lat i ${savings.monthsSavedRem} mies.</div>
+                </div>
+            </td>
+        </tr>
+    </table>
+    
+    <div class="page-break"></div>
+    
+    <div class="section-title">2. Wizualizacja Graficzna Spłaty</div>
+    <p style="font-size: 10pt; margin-bottom: 15px;">Wizualizacja podziału kosztów rocznych oraz tempa spłaty pozostałego kapitału zadłużenia.</p>
+    
+    <div class="chart-box">
+        <div style="font-weight: bold; margin-bottom: 5px; font-size: 10.5pt; color: #0F172A;">Harmonogram spłaty rocznej (kapitał vs. odsetki vs. nadpłaty)</div>
+        <img src="cid:chart-yearly-cost.png" class="chart-image" alt="Wykres spłaty rocznej">
+        <div style="font-size: 8.5pt; color: #64748B; margin-top: 5px;">Rysunek 1: Roczny podział spłaty kapitału, odsetek oraz nadpłat w scenariuszu z nadpłatami.</div>
+    </div>
+    
+    <div class="chart-box">
+        <div style="font-weight: bold; margin-bottom: 5px; font-size: 10.5pt; color: #0F172A;">Tempo spłaty kapitału kredytu (Bez nadpłat vs Z nadpłatami)</div>
+        <img src="cid:chart-loan-balance.png" class="chart-image" alt="Wykres spadku salda">
+        <div style="font-size: 8.5pt; color: #64748B; margin-top: 5px;">Rysunek 2: Porównanie spadku pozostałego salda kredytu w czasie. Linia przerywana przedstawia scenariusz standardowy.</div>
+    </div>
+    
+    <div class="page-break"></div>
+    
+    <div class="section-title">3. Szczegółowy Plan Spłat (Pierwsze 12 rat)</div>
+    <p style="font-size: 10pt; margin-bottom: 15px;">Początkowe 12 miesięcy spłaty kredytu z uwzględnieniem podziału raty podstawowej oraz planowanych nadpłat.</p>
+    
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th style="width: 8%;">Nr</th>
+                <th style="width: 14%;">Miesiąc</th>
+                <th style="width: 15%;">Kapitał</th>
+                <th style="width: 15%;">Odsetki</th>
+                <th style="width: 15%;">Rata</th>
+                <th style="width: 15%;">Nadpłata</th>
+                <th style="width: 18%;">Suma płatności</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${scheduleRowsHtml}
+            <tr class="sum-row">
+                <td>Suma</td>
+                <td>12 mies.</td>
+                <td>${formatPLN(previewSums.capital)}</td>
+                <td>${formatPLN(previewSums.interest)}</td>
+                <td>${formatPLN(previewSums.instalment)}</td>
+                <td>${formatPLN(previewSums.overpayment)}</td>
+                <td>${formatPLN(previewSums.totalCost)}</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <div style="margin-top: 20px; border-left: 3px solid #2563EB; padding-left: 12px; font-size: 9.5pt; color: #475569; line-height: 1.4;">
+        <strong>Informacja dodatkowa:</strong><br>
+        1. Obliczenia przeprowadzono przy założeniu niezmiennego oprocentowania w całym okresie kredytowania.<br>
+        2. Wpływ nadpłat realizowany jest w modelu: <strong>${strategyDescription}</strong>.<br>
+        3. Rzeczywisty harmonogram spłat generowany przez bank może nieznacznie odbiegać ze względu na specyficzne zasady naliczania odsetek w danym banku (np. liczba dni w roku, dni wolne).
+    </div>
+</body>
+</html>`;
+
+    // Construct MHTML
+    const boundary = 'NEXT.ITEM-BOUNDARY';
+    let mhtml = `MIME-Version: 1.0
+Content-Type: multipart/related; boundary="${boundary}"
+
+--${boundary}
+Content-Type: text/html; charset="utf-8"
+Content-Location: file:///main.html
+
+${htmlTemplate}
+`;
+
+    if (yearlyCostChartBase64) {
+        mhtml += `
+--${boundary}
+Content-ID: <chart-yearly-cost.png>
+Content-Location: file:///chart-yearly-cost.png
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+
+${yearlyCostChartBase64}
+`;
+    }
+
+    if (loanBalanceChartBase64) {
+        mhtml += `
+--${boundary}
+Content-ID: <chart-loan-balance.png>
+Content-Location: file:///chart-loan-balance.png
+Content-Type: image/png
+Content-Transfer-Encoding: base64
+
+${loanBalanceChartBase64}
+`;
+    }
+
+    mhtml += `\n--${boundary}--`;
+
+    const blob = new Blob([mhtml], { type: 'application/msword;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    
+    const formattedDate = new Date().toISOString().slice(0, 10);
+    link.setAttribute('download', `Raport_Kredytowy_Nadplaty_${formattedDate}.doc`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('Wyeksportowano profesjonalny raport do pliku Word (.doc).', 'success');
 }
