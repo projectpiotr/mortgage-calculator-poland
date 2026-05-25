@@ -30,11 +30,11 @@ async function fetchWiborRates() {
     const proxyUrls = [
         (target) => `https://api.allorigins.win/get?url=${encodeURIComponent(target)}`,
         (target) => `https://corsproxy.io/?${encodeURIComponent(target)}`,
-        (target) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(target)}`
+        (target) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(target)}`
     ];
     
     const bankierUrl = 'https://www.bankier.pl/mieszkaniowe/stopy-procentowe/wibor';
-    let bankierHtml = '';
+    let rates = {};
     let bankierSuccess = false;
     
     for (const getProxyUrl of proxyUrls) {
@@ -43,16 +43,20 @@ async function fetchWiborRates() {
             const response = await fetch(requestUrl);
             if (!response.ok) continue;
             
+            let html = '';
             if (requestUrl.includes('allorigins')) {
                 const data = await response.json();
-                bankierHtml = data.contents;
+                html = data.contents;
             } else {
-                bankierHtml = await response.text();
+                html = await response.text();
             }
             
-            if (bankierHtml && bankierHtml.includes('WIBOR')) {
-                bankierSuccess = true;
-                break;
+            if (html) {
+                rates = parseBankierHtml(html);
+                if (Object.keys(rates).length > 0) {
+                    bankierSuccess = true;
+                    break;
+                }
             }
         } catch (error) {
             console.warn('Bankier fetch failed using proxy, trying next...', error);
@@ -60,22 +64,15 @@ async function fetchWiborRates() {
     }
     
     if (bankierSuccess) {
-        try {
-            const rates = parseBankierHtml(bankierHtml);
-            if (Object.keys(rates).length > 0) {
-                return {
-                    rates: {
-                        '1M': rates['1M'] || FALLBACK_WIBOR['1M'],
-                        '3M': rates['3M'] || FALLBACK_WIBOR['3M'],
-                        '6M': rates['6M'] || FALLBACK_WIBOR['6M']
-                    },
-                    success: true,
-                    message: 'Pomyślnie pobrano aktualne stawki WIBOR z serwisu Bankier.pl!'
-                };
-            }
-        } catch (parseError) {
-            console.error('Failed to parse Bankier HTML:', parseError);
-        }
+        return {
+            rates: {
+                '1M': rates['1M'] || FALLBACK_WIBOR['1M'],
+                '3M': rates['3M'] || FALLBACK_WIBOR['3M'],
+                '6M': rates['6M'] || FALLBACK_WIBOR['6M']
+            },
+            success: true,
+            message: 'Pomyślnie pobrano aktualne stawki WIBOR z serwisu Bankier.pl!'
+        };
     }
     
     console.warn('All live sources failed. Using fallback data.');
@@ -88,7 +85,7 @@ async function fetchWiborRates() {
 
 function parseBankierHtml(html) {
     const rates = {};
-    const regex = /WIBOR\s+(1M|3M|6M).*?([\d,]+)%/gi;
+    const regex = /WIBOR\s+(1M|3M|6M)<\/a><\/td>\s*<td[^>]*>\s*([\d,]+)%/gi;
     let match;
     while ((match = regex.exec(html)) !== null) {
         const term = match[1].toUpperCase();
