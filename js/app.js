@@ -744,6 +744,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         modalSubmit: document.getElementById('modal-submit'),
         btnExportCsv: document.getElementById('btn-export-csv'),
         btnExportWord: document.getElementById('btn-export-word'),
+        btnExportWordTop: document.getElementById('btn-export-word-top'),
         warningBox: document.getElementById('calculator-placeholder-warning'),
         warningList: document.getElementById('warning-missing-list'),
         resultsWrapper: document.getElementById('calculator-results-wrapper'),
@@ -1147,6 +1148,9 @@ function setupEventListeners() {
 
     els.btnExportCsv.addEventListener('click', exportScheduleToCsv);
     els.btnExportWord.addEventListener('click', exportScheduleToWord);
+    if (els.btnExportWordTop) {
+        els.btnExportWordTop.addEventListener('click', exportScheduleToWord);
+    }
 }
 
 function updateEndDateFromMonths() {
