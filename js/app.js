@@ -101,30 +101,7 @@ function parseBankierHtml(html) {
     return rates;
 }
 
-function parseWiborHtml(html) {
-    const rates = {};
-    const cleanHtml = html.replace(/<!--[\s\S]*?-->/g, '');
-    
-    // Regex matching table cell rows: Termin | WIBID | WIBOR | Data
-    const regex = /<td>\s*(1M|3M|6M)\s*<\/td>\s*<td>\s*([\d,]*%?)\s*<\/td>\s*<td>\s*([\d,]+)%?\s*<\/td>\s*<td>\s*(\d{4}-\d{2}-\d{2})\s*<\/td>/g;
-    
-    let match;
-    while ((match = regex.exec(cleanHtml)) !== null) {
-        const term = match[1].trim();
-        const wiborStr = match[3].trim();
-        const date = match[4].trim();
-        const value = parseFloat(wiborStr.replace(',', '.'));
-        
-        if (!isNaN(value)) {
-            rates[term] = {
-                value: value,
-                date: date,
-                isFallback: false
-            };
-        }
-    }
-    return rates;
-}
+
 
 // ==========================================
 // 3. FINANCIAL CALCULATIONS ENGINE

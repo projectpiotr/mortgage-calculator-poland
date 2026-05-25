@@ -7,52 +7,41 @@ export const FALLBACK_WIBOR = {
 export async function fetchWiborRates() {
     const proxyUrls = [
         (target) => `https://api.allorigins.win/get?url=${encodeURIComponent(target)}`,
-        (target) => `https://corsproxy.io/?${encodeURIComponent(target)}`
+        (target) => `https://corsproxy.io/?${encodeURIComponent(target)}`,
+        (target) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(target)}`
     ];
     
-    const targetUrl = 'https://gpwbenchmark.pl/';
-    let htmlContent = '';
-    let success = false;
-    let usingProxy = '';
-
-    // Attempt to fetch via proxies sequentially
+    const bankierUrl = 'https://www.bankier.pl/mieszkaniowe/stopy-procentowe/wibor';
+    let rates = {};
+    let bankierSuccess = false;
+    
     for (const getProxyUrl of proxyUrls) {
         try {
-            const requestUrl = getProxyUrl(targetUrl);
+            const requestUrl = getProxyUrl(bankierUrl);
             const response = await fetch(requestUrl);
             if (!response.ok) continue;
             
+            let html = '';
             if (requestUrl.includes('allorigins')) {
                 const data = await response.json();
-                htmlContent = data.contents;
+                html = data.contents;
             } else {
-                htmlContent = await response.text();
+                html = await response.text();
             }
             
-            if (htmlContent && htmlContent.includes('WIBOR')) {
-                success = true;
-                usingProxy = requestUrl;
-                break;
+            if (html) {
+                rates = parseBankierHtml(html);
+                if (Object.keys(rates).length > 0) {
+                    bankierSuccess = true;
+                    break;
+                }
             }
         } catch (error) {
-            console.warn('WIBOR fetch failed using proxy, trying next...', error);
+            console.warn('Bankier fetch failed using proxy, trying next...', error);
         }
     }
-
-    if (!success) {
-        console.warn('All proxies failed to fetch WIBOR. Using fallback data.');
-        return {
-            rates: FALLBACK_WIBOR,
-            success: false,
-            message: 'Nie udało się pobrać aktualnych stawek. Użyto ostatnich dostępnych z 22.05.2026 r.'
-        };
-    }
-
-    try {
-        const rates = parseWiborHtml(htmlContent);
-        if (Object.keys(rates).length === 0) {
-            throw new Error('Parsed 0 rates from HTML');
-        }
+    
+    if (bankierSuccess) {
         return {
             rates: {
                 '1M': rates['1M'] || FALLBACK_WIBOR['1M'],
@@ -60,47 +49,32 @@ export async function fetchWiborRates() {
                 '6M': rates['6M'] || FALLBACK_WIBOR['6M']
             },
             success: true,
-            message: `Pomyślnie pobrano stawki WIBOR z dnia ${rates['3M']?.date || 'dzisiejszego'}.`
-        };
-    } catch (parseError) {
-        console.error('Failed to parse WIBOR HTML content:', parseError);
-        return {
-            rates: FALLBACK_WIBOR,
-            success: false,
-            message: 'Błąd podczas przetwarzania danych. Użyto stawek zapasowych.'
+            message: 'Pomyślnie pobrano aktualne stawki WIBOR z serwisu Bankier.pl!'
         };
     }
+    
+    console.warn('All live sources failed. Using fallback data.');
+    return {
+        rates: FALLBACK_WIBOR,
+        success: false,
+        message: 'Nie udało się pobrać aktualnych stawek z serwisu Bankier.pl. Użyto ostatnich dostępnych z 22.05.2026 r.'
+    };
 }
 
-function parseWiborHtml(html) {
+function parseBankierHtml(html) {
     const rates = {};
-    
-    // Clean up HTML comments and extra whitespace to make regex matching reliable
-    const cleanHtml = html.replace(/<!--[\s\S]*?-->/g, '');
-    
-    // Regex for matching GPW Benchmark's table row structure:
-    // <td>1M</td>
-    // <td>3,62%</td>
-    // <td>3,82%</td>
-    // <td>2026-05-22</td>
-    const regex = /<td>\s*(1M|3M|6M)\s*<\/td>\s*<td>\s*([\d,]*%?)\s*<\/td>\s*<td>\s*([\d,]+)%?\s*<\/td>\s*<td>\s*(\d{4}-\d{2}-\d{2})\s*<\/td>/g;
-    
+    const regex = /WIBOR\s+(1M|3M|6M)<\/a><\/td>\s*<td[^>]*>\s*([\d,]+)%/gi;
     let match;
-    while ((match = regex.exec(cleanHtml)) !== null) {
-        const term = match[1].trim();
-        const wiborStr = match[3].trim();
-        const date = match[4].trim();
-        
-        const value = parseFloat(wiborStr.replace(',', '.'));
-        
-        if (!isNaN(value)) {
+    while ((match = regex.exec(html)) !== null) {
+        const term = match[1].toUpperCase();
+        const value = parseFloat(match[2].replace(',', '.'));
+        if (!isNaN(value) && !rates[term]) {
             rates[term] = {
                 value: value,
-                date: date,
+                date: new Date().toISOString().slice(0, 10),
                 isFallback: false
             };
         }
     }
-    
     return rates;
 }
