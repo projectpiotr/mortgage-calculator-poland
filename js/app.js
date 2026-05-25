@@ -32,14 +32,14 @@ async function fetchWiborRates() {
         (target) => `https://corsproxy.io/?${encodeURIComponent(target)}`
     ];
     
-    const targetUrl = 'https://gpwbenchmark.pl/';
+    // 1. First attempt: GPW Benchmark
+    const gpwUrl = 'https://gpwbenchmark.pl/';
     let htmlContent = '';
     let success = false;
-    let usingProxy = '';
-
+    
     for (const getProxyUrl of proxyUrls) {
         try {
-            const requestUrl = getProxyUrl(targetUrl);
+            const requestUrl = getProxyUrl(gpwUrl);
             const response = await fetch(requestUrl);
             if (!response.ok) continue;
             
@@ -52,45 +52,104 @@ async function fetchWiborRates() {
             
             if (htmlContent && htmlContent.includes('WIBOR')) {
                 success = true;
-                usingProxy = requestUrl;
                 break;
             }
         } catch (error) {
-            console.warn('WIBOR fetch failed using proxy, trying next...', error);
+            console.warn('GPW Benchmark fetch failed using proxy, trying next...', error);
         }
     }
-
-    if (!success) {
-        console.warn('All proxies failed to fetch WIBOR. Using fallback data.');
-        return {
-            rates: FALLBACK_WIBOR,
-            success: false,
-            message: 'Nie udało się pobrać aktualnych stawek. Użyto ostatnich dostępnych z 22.05.2026 r.'
-        };
-    }
-
-    try {
-        const rates = parseWiborHtml(htmlContent);
-        if (Object.keys(rates).length === 0) {
-            throw new Error('Parsed 0 rates from HTML');
+    
+    if (success) {
+        try {
+            const rates = parseWiborHtml(htmlContent);
+            if (Object.keys(rates).length > 0) {
+                return {
+                    rates: {
+                        '1M': rates['1M'] || FALLBACK_WIBOR['1M'],
+                        '3M': rates['3M'] || FALLBACK_WIBOR['3M'],
+                        '6M': rates['6M'] || FALLBACK_WIBOR['6M']
+                    },
+                    success: true,
+                    message: `Pomyślnie pobrano stawki WIBOR z dnia ${rates['3M']?.date || 'dzisiejszego'} (GPW Benchmark).`
+                };
+            }
+        } catch (parseError) {
+            console.error('Failed to parse GPW Benchmark HTML:', parseError);
         }
-        return {
-            rates: {
-                '1M': rates['1M'] || FALLBACK_WIBOR['1M'],
-                '3M': rates['3M'] || FALLBACK_WIBOR['3M'],
-                '6M': rates['6M'] || FALLBACK_WIBOR['6M']
-            },
-            success: true,
-            message: `Pomyślnie pobrano stawki WIBOR z dnia ${rates['3M']?.date || 'dzisiejszego'}.`
-        };
-    } catch (parseError) {
-        console.error('Failed to parse WIBOR HTML content:', parseError);
-        return {
-            rates: FALLBACK_WIBOR,
-            success: false,
-            message: 'Błąd podczas przetwarzania danych. Użyto stawek zapasowych.'
-        };
     }
+    
+    // 2. Second attempt: Bankier.pl (Backup source)
+    console.warn('GPW Benchmark failed. Trying Bankier.pl...');
+    const bankierUrl = 'https://www.bankier.pl/mieszkaniowe/stopy-procentowe/wibor';
+    let bankierHtml = '';
+    let bankierSuccess = false;
+    
+    for (const getProxyUrl of proxyUrls) {
+        try {
+            const requestUrl = getProxyUrl(bankierUrl);
+            const response = await fetch(requestUrl);
+            if (!response.ok) continue;
+            
+            if (requestUrl.includes('allorigins')) {
+                const data = await response.json();
+                bankierHtml = data.contents;
+            } else {
+                bankierHtml = await response.text();
+            }
+            
+            if (bankierHtml && bankierHtml.includes('WIBOR')) {
+                bankierSuccess = true;
+                break;
+            }
+        } catch (error) {
+            console.warn('Bankier fetch failed using proxy, trying next...', error);
+        }
+    }
+    
+    if (bankierSuccess) {
+        try {
+            const rates = parseBankierHtml(bankierHtml);
+            if (Object.keys(rates).length > 0) {
+                return {
+                    rates: {
+                        '1M': rates['1M'] || FALLBACK_WIBOR['1M'],
+                        '3M': rates['3M'] || FALLBACK_WIBOR['3M'],
+                        '6M': rates['6M'] || FALLBACK_WIBOR['6M']
+                    },
+                    success: true,
+                    message: 'Nie udało się pobrać stawek z GPW Benchmark, ale pomyślnie pobrano aktualne stawki z serwisu Bankier.pl!'
+                };
+            }
+        } catch (parseError) {
+            console.error('Failed to parse Bankier HTML:', parseError);
+        }
+    }
+    
+    // 3. Fallback: Both failed
+    console.warn('All live sources failed. Using fallback data.');
+    return {
+        rates: FALLBACK_WIBOR,
+        success: false,
+        message: 'Nie udało się pobrać aktualnych stawek z GPW ani z Bankiera. Użyto ostatnich dostępnych z 22.05.2026 r.'
+    };
+}
+
+function parseBankierHtml(html) {
+    const rates = {};
+    const regex = /WIBOR\s+(1M|3M|6M).*?([\d,]+)%/gi;
+    let match;
+    while ((match = regex.exec(html)) !== null) {
+        const term = match[1].toUpperCase();
+        const value = parseFloat(match[2].replace(',', '.'));
+        if (!isNaN(value) && !rates[term]) {
+            rates[term] = {
+                value: value,
+                date: new Date().toISOString().slice(0, 10),
+                isFallback: false
+            };
+        }
+    }
+    return rates;
 }
 
 function parseWiborHtml(html) {
