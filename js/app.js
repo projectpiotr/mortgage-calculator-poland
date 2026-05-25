@@ -29,7 +29,8 @@ const state = {
 async function fetchWiborRates() {
     const proxyUrls = [
         (target) => `https://api.allorigins.win/get?url=${encodeURIComponent(target)}`,
-        (target) => `https://corsproxy.io/?${encodeURIComponent(target)}`
+        (target) => `https://corsproxy.io/?${encodeURIComponent(target)}`,
+        (target) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(target)}`
     ];
     
     const bankierUrl = 'https://www.bankier.pl/mieszkaniowe/stopy-procentowe/wibor';
@@ -657,13 +658,29 @@ function showToast(message, type = 'success') {
         iconSvg = `<svg width="16" height="16" fill="var(--color-warning)" viewBox="0 0 16 16"><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>`;
     }
 
-    toast.innerHTML = `${iconSvg}<span class="toast-message">${message}</span>`;
+    toast.innerHTML = `
+        ${iconSvg}
+        <span class="toast-message" style="flex: 1; padding-right: 0.5rem;">${message}</span>
+        <button type="button" class="toast-close" style="background: none; border: none; color: var(--color-text-muted); cursor: pointer; font-size: 1.125rem; font-weight: 600; line-height: 1; padding: 0.125rem 0.25rem; margin-left: auto; transition: var(--transition-fast);">&times;</button>
+    `;
+    
+    const closeBtn = toast.querySelector('.toast-close');
+    closeBtn.addEventListener('mouseenter', () => closeBtn.style.color = 'var(--color-text-main)');
+    closeBtn.addEventListener('mouseleave', () => closeBtn.style.color = 'var(--color-text-muted)');
+    
     container.appendChild(toast);
 
-    setTimeout(() => {
+    let dismissTimeout;
+    
+    const dismiss = () => {
+        if (dismissTimeout) clearTimeout(dismissTimeout);
         toast.style.animation = 'fadeOut 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards';
         toast.addEventListener('animationend', () => { toast.remove(); });
-    }, 4000);
+    };
+
+    closeBtn.addEventListener('click', dismiss);
+
+    dismissTimeout = setTimeout(dismiss, 5000);
 }
 
 // ==========================================
