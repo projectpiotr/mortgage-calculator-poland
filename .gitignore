@@ -22,6 +22,8 @@ pnpm-lock.yaml
 # Local env files
 .env
 .env*.local
+js/test-config.json
+test-config.json
 
 # Temporary/Log files
 logs/

@@ -757,9 +757,76 @@ window.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
     await handleWiborFetch();
     loadStateFromLocalStorage();
+    await checkAndEnableTestData();
     recalculate();
     initTooltips();
 });
+
+async function checkAndEnableTestData() {
+    try {
+        const response = await fetch('js/test-config.json');
+        if (!response.ok) return;
+        const config = await response.json();
+        
+        const btn = document.createElement('button');
+        btn.id = 'btn-load-test-data';
+        btn.type = 'button';
+        btn.className = 'wibor-status-badge';
+        btn.style.cursor = 'pointer';
+        btn.style.backgroundColor = 'var(--color-success-light)';
+        btn.style.color = 'var(--color-success)';
+        btn.style.borderColor = 'var(--color-success)';
+        btn.style.fontWeight = '600';
+        btn.style.marginRight = '0.75rem';
+        btn.style.padding = '0.5rem 1rem';
+        btn.style.transition = 'var(--transition-fast)';
+        btn.innerHTML = '⚡ Wczytaj moje dane';
+        
+        btn.addEventListener('mouseenter', () => {
+            btn.style.backgroundColor = 'var(--color-success)';
+            btn.style.color = 'var(--color-text-white)';
+        });
+        btn.addEventListener('mouseleave', () => {
+            btn.style.backgroundColor = 'var(--color-success-light)';
+            btn.style.color = 'var(--color-success)';
+        });
+        
+        btn.addEventListener('click', () => {
+            if (config.principal) els.principalInput.value = config.principal;
+            if (config.margin) els.marginInput.value = config.margin;
+            if (config.months) {
+                els.monthsInput.value = config.months;
+                els.durationModeSelect.value = 'months';
+                els.monthsInputGroup.style.display = 'block';
+                els.endDateInputGroup.style.display = 'none';
+                updateEndDateFromMonths();
+            }
+            
+            state.interestType = 'variable';
+            els.interestTypeVariable.classList.add('active');
+            els.interestTypeFixed.classList.remove('active');
+            els.variableRateFields.style.display = 'block';
+            els.fixedRateFields.style.display = 'none';
+            
+            const wibor3mBtn = els.wiborTermSelector.querySelector('.wibor-btn[data-term="3M"]');
+            if (wibor3mBtn) {
+                wibor3mBtn.click();
+            } else {
+                recalculate();
+            }
+            
+            showToast('Utylizowano poufne dane testowe!', 'success');
+        });
+        
+        const header = document.querySelector('.header');
+        const badge = document.getElementById('wibor-sync-badge');
+        if (header && badge) {
+            header.insertBefore(btn, badge);
+        }
+    } catch (e) {
+        console.warn('Test config not found, skipping test button injection.', e);
+    }
+}
 
 function saveStateToLocalStorage() {
     try {
