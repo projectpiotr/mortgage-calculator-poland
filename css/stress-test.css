@@ -1,0 +1,445 @@
+/* ============================================
+   STRESS TEST - Symulator Zmian Stóp Procentowych
+   ============================================ */
+
+/* --- Dynamic WIBOR Schedule --- */
+.rate-schedule-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.rate-schedule-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    max-height: 220px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.rate-schedule-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.625rem;
+    background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 0.8125rem;
+    transition: all var(--transition-fast);
+    animation: slideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.rate-schedule-item:hover {
+    border-color: var(--color-accent);
+    background: #EFF6FF;
+}
+
+.rate-schedule-item .rsi-year {
+    font-weight: 700;
+    color: var(--color-accent);
+    min-width: 36px;
+}
+
+.rate-schedule-item .rsi-rate-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.rate-schedule-item input[type="number"] {
+    width: 70px;
+    padding: 0.25rem 0.375rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+    background: white;
+    transition: border-color var(--transition-fast);
+    text-align: center;
+}
+
+.rate-schedule-item input[type="number"]:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.rsi-unit {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+}
+
+.rsi-remove {
+    background: none;
+    border: none;
+    color: var(--color-text-light);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0.125rem 0.25rem;
+    border-radius: 4px;
+    transition: all var(--transition-fast);
+}
+.rsi-remove:hover {
+    color: var(--color-danger);
+    background: var(--color-danger-light);
+}
+
+.btn-add-rate-schedule {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    width: 100%;
+    padding: 0.5rem;
+    background: var(--color-accent-light);
+    border: 1.5px dashed var(--color-accent);
+    border-radius: var(--radius-sm);
+    color: var(--color-accent);
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    margin-top: 0.5rem;
+}
+.btn-add-rate-schedule:hover {
+    background: var(--color-accent);
+    border-style: solid;
+    color: white;
+}
+
+/* --- Stress Test Results Panel --- */
+.stress-results-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-md);
+    animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.stress-results-title {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 0.75rem;
+}
+
+.stress-results-title svg {
+    color: var(--color-accent);
+    flex-shrink: 0;
+}
+
+/* Scenario Comparison Cards */
+.stress-scenario-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.875rem;
+    margin-bottom: 1.5rem;
+}
+
+.stress-scenario-card {
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    border: 1.5px solid transparent;
+    position: relative;
+    overflow: hidden;
+    transition: all var(--transition-normal);
+}
+
+.stress-scenario-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.stress-scenario-card.base {
+    background: linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%);
+    border-color: #BAE6FD;
+}
+.stress-scenario-card.base::before { background: #0EA5E9; }
+
+.stress-scenario-card.up1 {
+    background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
+    border-color: #FDE68A;
+}
+.stress-scenario-card.up1::before { background: #F59E0B; }
+
+.stress-scenario-card.up2 {
+    background: linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%);
+    border-color: #FED7AA;
+}
+.stress-scenario-card.up2::before { background: #F97316; }
+
+.stress-scenario-card.up3 {
+    background: linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%);
+    border-color: #FECACA;
+}
+.stress-scenario-card.up3::before { background: #EF4444; }
+
+.stress-scenario-card.down1 {
+    background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+    border-color: #A7F3D0;
+}
+.stress-scenario-card.down1::before { background: #10B981; }
+
+.stress-scenario-card.custom {
+    background: linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%);
+    border-color: #DDD6FE;
+}
+.stress-scenario-card.custom::before { background: #7C3AED; }
+
+.stress-scenario-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-hover);
+}
+
+.stress-card-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+    color: var(--color-text-muted);
+}
+
+.stress-card-rate {
+    font-size: 1.375rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+    margin-bottom: 0.75rem;
+    letter-spacing: -0.02em;
+}
+
+.stress-card-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.stress-card-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+}
+
+.stress-card-stat .stat-label {
+    color: var(--color-text-muted);
+}
+
+.stress-card-stat .stat-value {
+    font-weight: 700;
+    color: var(--color-text-main);
+}
+
+.stress-card-stat .stat-value.up {
+    color: var(--color-danger);
+}
+
+.stress-card-stat .stat-value.down {
+    color: var(--color-success);
+}
+
+.stress-card-delta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--radius-full);
+    margin-top: 0.5rem;
+}
+
+.stress-card-delta.up {
+    background: rgba(220, 38, 38, 0.12);
+    color: #DC2626;
+}
+.stress-card-delta.down {
+    background: rgba(5, 150, 105, 0.12);
+    color: #059669;
+}
+.stress-card-delta.neutral {
+    background: rgba(100, 116, 139, 0.12);
+    color: #64748B;
+}
+
+/* Stress test chart container */
+.stress-chart-container {
+    height: 280px;
+    margin-top: 1rem;
+    position: relative;
+}
+
+/* Stress current scenario highlight badge */
+.stress-active-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    background: linear-gradient(135deg, #EFF6FF, #DBEAFE);
+    border: 1px solid #BFDBFE;
+    border-radius: var(--radius-full);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-accent);
+    margin-bottom: 1rem;
+}
+
+.stress-active-badge .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.75); }
+}
+
+/* Stress-test section separator */
+.stress-section-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.875rem 0 0.625rem;
+    color: var(--color-text-muted);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+
+.stress-section-divider::before,
+.stress-section-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--color-border);
+}
+
+/* Sensitivity insight bar */
+.sensitivity-bar-wrap {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+    border-radius: var(--radius-md);
+    color: white;
+}
+
+.sensitivity-bar-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #94A3B8;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.75rem;
+}
+
+.sensitivity-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.sensitivity-row {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-size: 0.75rem;
+}
+
+.sensitivity-row-label {
+    min-width: 80px;
+    font-weight: 600;
+    color: #CBD5E1;
+}
+
+.sensitivity-bar-track {
+    flex: 1;
+    height: 8px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 99px;
+    overflow: hidden;
+}
+
+.sensitivity-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sensitivity-row-val {
+    min-width: 70px;
+    text-align: right;
+    font-weight: 700;
+    color: white;
+    font-size: 0.75rem;
+}
+
+/* Collapsible stress panel toggle */
+.stress-toggle-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+    padding: 0.125rem 0;
+    gap: 0.5rem;
+}
+
+.stress-toggle-header:hover .stress-toggle-icon {
+    color: var(--color-accent);
+}
+
+.stress-toggle-icon {
+    color: var(--color-text-muted);
+    transition: transform var(--transition-fast), color var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.stress-toggle-icon.open {
+    transform: rotate(180deg);
+}
+
+.stress-toggle-body {
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+                opacity 0.3s ease;
+    max-height: 0;
+    opacity: 0;
+}
+
+.stress-toggle-body.open {
+    max-height: 1200px;
+    opacity: 1;
+}

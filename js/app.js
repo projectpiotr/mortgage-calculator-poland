@@ -739,71 +739,81 @@ window.addEventListener('DOMContentLoaded', async () => {
     await checkAndEnableTestData();
     recalculate();
     initTooltips();
+    setupStressTestListeners();
 });
 
 async function checkAndEnableTestData() {
+    let config = {
+        principal: "561110.95",
+        months: "251",
+        margin: "1.99"
+    };
+    
     try {
         const response = await fetch('js/test-config.json');
-        if (!response.ok) return;
-        const config = await response.json();
-        
-        const btn = document.createElement('button');
-        btn.id = 'btn-load-test-data';
-        btn.type = 'button';
-        btn.className = 'wibor-status-badge';
-        btn.style.cursor = 'pointer';
-        btn.style.backgroundColor = 'var(--color-success-light)';
-        btn.style.color = 'var(--color-success)';
-        btn.style.borderColor = 'var(--color-success)';
-        btn.style.fontWeight = '600';
-        btn.style.marginRight = '0.75rem';
-        btn.style.padding = '0.5rem 1rem';
-        btn.style.transition = 'var(--transition-fast)';
-        btn.innerHTML = '⚡ Wczytaj moje dane';
-        
-        btn.addEventListener('mouseenter', () => {
-            btn.style.backgroundColor = 'var(--color-success)';
-            btn.style.color = 'var(--color-text-white)';
-        });
-        btn.addEventListener('mouseleave', () => {
-            btn.style.backgroundColor = 'var(--color-success-light)';
-            btn.style.color = 'var(--color-success)';
-        });
-        
-        btn.addEventListener('click', () => {
-            if (config.principal) els.principalInput.value = config.principal;
-            if (config.margin) els.marginInput.value = config.margin;
-            if (config.months) {
-                els.monthsInput.value = config.months;
-                els.durationModeSelect.value = 'months';
-                els.monthsInputGroup.style.display = 'block';
-                els.endDateInputGroup.style.display = 'none';
-                updateEndDateFromMonths();
-            }
-            
-            state.interestType = 'variable';
-            els.interestTypeVariable.classList.add('active');
-            els.interestTypeFixed.classList.remove('active');
-            els.variableRateFields.style.display = 'block';
-            els.fixedRateFields.style.display = 'none';
-            
-            const wibor3mBtn = els.wiborTermSelector.querySelector('.wibor-btn[data-term="3M"]');
-            if (wibor3mBtn) {
-                wibor3mBtn.click();
-            } else {
-                recalculate();
-            }
-            
-            showToast('Utylizowano poufne dane testowe!', 'success');
-        });
-        
-        const header = document.querySelector('.header');
-        const badge = document.getElementById('wibor-sync-badge');
-        if (header && badge) {
-            header.insertBefore(btn, badge);
+        if (response.ok) {
+            config = await response.json();
+        } else {
+            console.log('Using default test data because test-config.json fetch returned status: ' + response.status);
         }
     } catch (e) {
-        console.warn('Test config not found, skipping test button injection.', e);
+        console.warn('Failed to fetch test-config.json (likely due to CORS on file:// protocol). Using built-in test data fallback.', e);
+    }
+    
+    const btn = document.createElement('button');
+    btn.id = 'btn-load-test-data';
+    btn.type = 'button';
+    btn.className = 'wibor-status-badge';
+    btn.style.cursor = 'pointer';
+    btn.style.backgroundColor = 'var(--color-success-light)';
+    btn.style.color = 'var(--color-success)';
+    btn.style.borderColor = 'var(--color-success)';
+    btn.style.fontWeight = '600';
+    btn.style.marginRight = '0.75rem';
+    btn.style.padding = '0.5rem 1rem';
+    btn.style.transition = 'var(--transition-fast)';
+    btn.innerHTML = '⚡ Wczytaj moje dane';
+    
+    btn.addEventListener('mouseenter', () => {
+        btn.style.backgroundColor = 'var(--color-success)';
+        btn.style.color = 'var(--color-text-white)';
+    });
+    btn.addEventListener('mouseleave', () => {
+        btn.style.backgroundColor = 'var(--color-success-light)';
+        btn.style.color = 'var(--color-success)';
+    });
+    
+    btn.addEventListener('click', () => {
+        if (config.principal) els.principalInput.value = config.principal;
+        if (config.margin) els.marginInput.value = config.margin;
+        if (config.months) {
+            els.monthsInput.value = config.months;
+            els.durationModeSelect.value = 'months';
+            els.monthsInputGroup.style.display = 'block';
+            els.endDateInputGroup.style.display = 'none';
+            updateEndDateFromMonths();
+        }
+        
+        state.interestType = 'variable';
+        els.interestTypeVariable.classList.add('active');
+        els.interestTypeFixed.classList.remove('active');
+        els.variableRateFields.style.display = 'block';
+        els.fixedRateFields.style.display = 'none';
+        
+        const wibor3mBtn = els.wiborTermSelector.querySelector('.wibor-btn[data-term="3M"]');
+        if (wibor3mBtn) {
+            wibor3mBtn.click();
+        } else {
+            recalculate();
+        }
+        
+        showToast('Utylizowano poufne dane testowe!', 'success');
+    });
+    
+    const header = document.querySelector('.header');
+    const badge = document.getElementById('wibor-sync-badge');
+    if (header && badge) {
+        header.insertBefore(btn, badge);
     }
 }
 
@@ -1933,3 +1943,525 @@ ${loanBalanceChartBase64}
     
     showToast('Wyeksportowano profesjonalny raport do pliku Word (.doc).', 'success');
 }
+
+
+// ==========================================
+// 8. STRESS TEST MODULE
+// ==========================================
+
+let stressChartInstance = null;
+
+const stressState = {
+    rateSchedule: []     // [{ year: 2027, rate: 5.5 }, ...]
+};
+
+/**
+ * Build stress scenarios to display.
+ * Always includes the base (current WIBOR + margin), plus dynamic-schedule if set.
+ */
+function buildStressScenarios(baseWibor, margin) {
+    const baseTotalRate = baseWibor + margin;
+    const deltas = [3, 2, 1, -1];
+
+    // Quick scenario list (base + predefined deltas)
+    const scenarios = [
+        { key: 'base',  label: 'Aktualny WIBOR', delta: 0,  cssClass: 'base' },
+        { key: 'up1',   label: 'WIBOR +1 p.p.',  delta: 1,  cssClass: 'up1' },
+        { key: 'up2',   label: 'WIBOR +2 p.p.',  delta: 2,  cssClass: 'up2' },
+        { key: 'up3',   label: 'WIBOR +3 p.p.',  delta: 3,  cssClass: 'up3' },
+        { key: 'down1', label: 'WIBOR −1 p.p.',  delta: -1, cssClass: 'down1' },
+    ];
+
+    // If we have a dynamic rate schedule, add it as "custom"
+    if (stressState.rateSchedule.length > 0) {
+        // Weighted-average effective rate across the entire schedule
+        const avgScheduleWibor = stressState.rateSchedule.reduce((a, b) => a + b.rate, 0) / stressState.rateSchedule.length;
+        const avgDelta = avgScheduleWibor - baseWibor;
+        scenarios.push({
+            key: 'custom',
+            label: 'Harmonogram dynamiczny',
+            delta: parseFloat(avgDelta.toFixed(2)),
+            cssClass: 'custom',
+            isDynamic: true
+        });
+    }
+
+    return scenarios.map(s => {
+        const scenarioWibor = Math.max(0, baseWibor + s.delta);
+        const result = {
+            ...s,
+            wibor: scenarioWibor,
+            totalRate: scenarioWibor + margin
+        };
+        return result;
+    });
+}
+
+/**
+ * Run mortgage calculation for a given WIBOR level.
+ * Uses current form values for all other params.
+ */
+function runScenarioCalc(wiborValue) {
+    const principal = parseFloat(els.principalInput.value) || 0;
+    const margin = parseFloat(els.marginInput.value) || 0;
+    const monthsRemaining = parseInt(els.monthsInput.value) || 0;
+    const startMonthYear = els.startMonthInput.value;
+    const monthlyOverpayment = parseFloat(els.overpaymentBaseInput.value) || 0;
+    const overpaymentImpact = els.overpaymentImpactDuration.checked ? 'reduce_duration' : 'reduce_instalment';
+
+    if (!principal || !monthsRemaining) return null;
+
+    return generateMortgageSchedules({
+        principal,
+        wibor: wiborValue,
+        margin: 0,   // rate already fully baked into wiborValue for fixed scenarios
+        monthsRemaining,
+        startMonthYear,
+        monthlyOverpayment,
+        overpaymentImpact,
+        customOverpayments: state.customOverpayments
+    });
+}
+
+/**
+ * Run dynamic schedule scenario — uses month-by-month WIBOR from stressState.rateSchedule.
+ * Falls back to baseWibor for months beyond the schedule.
+ */
+function runDynamicScenarioCalc(baseWibor, margin) {
+    const principal = parseFloat(els.principalInput.value) || 0;
+    const monthsRemaining = parseInt(els.monthsInput.value) || 0;
+    const startMonthYear = els.startMonthInput.value;
+    const monthlyOverpayment = parseFloat(els.overpaymentBaseInput.value) || 0;
+    const overpaymentImpact = els.overpaymentImpactDuration.checked ? 'reduce_duration' : 'reduce_instalment';
+
+    if (!principal || !monthsRemaining || stressState.rateSchedule.length === 0) return null;
+
+    // Build year->rate map
+    const yearRateMap = {};
+    stressState.rateSchedule.forEach(entry => {
+        yearRateMap[entry.year] = entry.rate;
+    });
+
+    const [startYear] = (startMonthYear || '').split('-').map(Number);
+
+    // We'll compute a custom schedule with per-month WIBOR
+    const customSchedule = [];
+    let balance = principal;
+    let totalInterest = 0, totalCapital = 0, totalOverpayments = 0;
+
+    const customOverpaymentMap = new Map();
+    state.customOverpayments.forEach(co => customOverpaymentMap.set(co.monthIndex, co.amount));
+
+    const [sy, sm] = (startMonthYear || '').split('-').map(Number);
+
+    // Initial instalment from base rate
+    const baseMonthlyRate = (baseWibor + margin) / 100 / 12;
+    let currentInstalment = calculateAnnuityInstalment(principal, baseMonthlyRate, monthsRemaining);
+
+    for (let i = 0; i < monthsRemaining * 2; i++) {
+        if (balance < 0.01) break;
+
+        // Determine year for this month
+        const totalM = (sm - 1) + i;
+        const currentYear = sy + Math.floor(totalM / 12);
+        const currentMonthNum = (totalM % 12) + 1;
+
+        // WIBOR for this month
+        const wiborForYear = yearRateMap[currentYear] !== undefined ? yearRateMap[currentYear] : baseWibor;
+        const annualRate = (wiborForYear + margin) / 100;
+        const monthlyRate = annualRate / 12;
+
+        const interest = balance * monthlyRate;
+
+        let scheduledInstalment = currentInstalment;
+        if (overpaymentImpact === 'reduce_instalment') {
+            const remMonths = Math.max(1, monthsRemaining - i);
+            scheduledInstalment = calculateAnnuityInstalment(balance, monthlyRate, remMonths);
+            currentInstalment = scheduledInstalment;
+        }
+
+        let capital = scheduledInstalment - interest;
+        if (capital < 0) capital = 0;
+        if (balance - capital < 0.01) capital = balance;
+
+        let overpayment = monthlyOverpayment + (customOverpaymentMap.get(i + 1) || 0);
+        const remAfterCapital = Math.max(0, balance - capital);
+        if (overpayment > remAfterCapital) overpayment = remAfterCapital;
+
+        balance -= (capital + overpayment);
+        totalInterest += interest;
+        totalCapital += capital;
+        totalOverpayments += overpayment;
+
+        const monthPad = String(currentMonthNum).padStart(2, '0');
+        customSchedule.push({
+            nr: i + 1,
+            monthLabel: `${monthPad}-${currentYear}`,
+            capitalPaid: capital,
+            interestPaid: interest,
+            instalment: capital + interest,
+            overpayment,
+            totalCost: capital + interest + overpayment,
+            balance: balance < 0.01 ? 0 : balance
+        });
+    }
+
+    return {
+        firstInstalment: customSchedule.length > 0 ? customSchedule[0].instalment : 0,
+        totalInterest,
+        totalCapital,
+        totalOverpayments,
+        totalCost: totalCapital + totalInterest + totalOverpayments,
+        duration: customSchedule.length,
+        schedule: customSchedule
+    };
+}
+
+/** Format rate in Polish style */
+function fmtRate(r) {
+    return r.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+}
+
+/**
+ * Main entry: run the full stress test and render all results.
+ */
+function runStressTest() {
+    const principal = parseFloat(els.principalInput.value) || 0;
+    const margin = state.interestType === 'fixed' ? 0 : (parseFloat(els.marginInput.value) || 0);
+    const monthsRemaining = parseInt(els.monthsInput.value) || 0;
+
+    let baseWibor;
+    if (state.interestType === 'fixed') {
+        baseWibor = parseFloat(els.fixedRateInput.value) || 0;
+    } else {
+        baseWibor = parseFloat(els.wiborInput.value) || 0;
+    }
+
+    if (!principal || !monthsRemaining || (!baseWibor && state.interestType !== 'fixed')) {
+        showToast('Uzupełnij parametry kredytu przed uruchomieniem stres-testu.', 'warning');
+        return;
+    }
+
+    const scenarios = buildStressScenarios(baseWibor, margin);
+
+    // Run calcs for each scenario
+    const scenarioResults = scenarios.map(s => {
+        let calc;
+        if (s.isDynamic) {
+            const dynResult = runDynamicScenarioCalc(baseWibor, margin);
+            if (!dynResult) return { ...s, firstInstalment: 0, totalInterest: 0, totalCost: 0, duration: 0 };
+            return { ...s, firstInstalment: dynResult.firstInstalment, totalInterest: dynResult.totalInterest, totalCost: dynResult.totalCost, duration: dynResult.duration };
+        }
+        calc = runScenarioCalc(s.totalRate);
+        if (!calc) return { ...s, firstInstalment: 0, totalInterest: 0, totalCost: 0, duration: 0 };
+        const firstInstalment = calc.overpaid.schedule.length > 0 ? calc.overpaid.schedule[0].instalment : 0;
+        return { ...s, firstInstalment, totalInterest: calc.overpaid.totalInterest, totalCost: calc.overpaid.totalCost, duration: calc.overpaid.duration };
+    });
+
+    const baseResult = scenarioResults.find(s => s.key === 'base');
+
+    // Update active badge
+    const activeLabelEl = document.getElementById('stress-active-label');
+    if (activeLabelEl) {
+        activeLabelEl.textContent = `Aktualny WIBOR: ${fmtRate(baseWibor)} | Marża: ${fmtRate(margin)} | Łącznie: ${fmtRate(baseWibor + margin)}`;
+    }
+
+    // Render scenario cards
+    renderStressScenarioCards(scenarioResults, baseResult);
+
+    // Render bar chart
+    renderStressChart(scenarioResults);
+
+    // Render sensitivity bars
+    renderSensitivityBars(scenarioResults, baseResult);
+
+    // Show results
+    const wrapper = document.getElementById('stress-results-wrapper');
+    if (wrapper) {
+        wrapper.style.display = 'block';
+        wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    showToast('Stres-test zakończony! Wyniki poniżej wykresów.', 'success');
+}
+
+function renderStressScenarioCards(results, baseResult) {
+    const container = document.getElementById('stress-scenario-cards');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const baseInstalment = baseResult ? baseResult.firstInstalment : 0;
+    const baseCost = baseResult ? baseResult.totalCost : 0;
+
+    results.forEach(res => {
+        const instalmentDiff = res.firstInstalment - baseInstalment;
+        const costDiff = res.totalCost - baseCost;
+        const isBase = res.key === 'base';
+
+        const deltaInstalment = isBase ? '' : (instalmentDiff > 0 ? `▲ +${formatPLN(instalmentDiff)}` : `▼ ${formatPLN(Math.abs(instalmentDiff))}`);
+        const deltaClass = instalmentDiff > 0 ? 'up' : (instalmentDiff < 0 ? 'down' : 'neutral');
+
+        const yrs = Math.floor(res.duration / 12);
+        const mths = res.duration % 12;
+
+        const card = document.createElement('div');
+        card.className = `stress-scenario-card ${res.cssClass}`;
+        card.innerHTML = `
+            <div class="stress-card-label">${res.label}</div>
+            <div class="stress-card-rate">${fmtRate(res.totalRate)}</div>
+            <div class="stress-card-stats">
+                <div class="stress-card-stat">
+                    <span class="stat-label">Rata</span>
+                    <span class="stat-value ${isBase ? '' : deltaClass}">${formatPLN(res.firstInstalment)}</span>
+                </div>
+                <div class="stress-card-stat">
+                    <span class="stat-label">Odsetki łącznie</span>
+                    <span class="stat-value ${isBase ? '' : (costDiff > 0 ? 'up' : 'down')}">${formatPLN(res.totalInterest)}</span>
+                </div>
+                <div class="stress-card-stat">
+                    <span class="stat-label">Czas spłaty</span>
+                    <span class="stat-value">${yrs} l. ${mths} m.</span>
+                </div>
+            </div>
+            ${!isBase ? `<div class="stress-card-delta ${deltaClass}">${deltaInstalment} / m-c</div>` : ''}
+        `;
+        container.appendChild(card);
+    });
+}
+
+function renderStressChart(results) {
+    const canvas = document.getElementById('chart-stress-scenarios');
+    if (!canvas) return;
+
+    if (stressChartInstance) {
+        stressChartInstance.destroy();
+        stressChartInstance = null;
+    }
+
+    const labels = results.map(r => r.label);
+    const instalmentData = results.map(r => Math.round(r.firstInstalment));
+    const interestData = results.map(r => Math.round(r.totalInterest));
+
+    const colorMap = {
+        base:   { bar: '#0EA5E9', border: '#0284C7' },
+        up1:    { bar: '#F59E0B', border: '#D97706' },
+        up2:    { bar: '#F97316', border: '#EA580C' },
+        up3:    { bar: '#EF4444', border: '#DC2626' },
+        down1:  { bar: '#10B981', border: '#059669' },
+        custom: { bar: '#7C3AED', border: '#6D28D9' }
+    };
+
+    const barColors = results.map(r => (colorMap[r.key] || colorMap.base).bar);
+    const borderColors = results.map(r => (colorMap[r.key] || colorMap.base).border);
+
+    stressChartInstance = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Rata miesięczna (PLN)',
+                    data: instalmentData,
+                    backgroundColor: barColors.map(c => c + 'CC'),
+                    borderColor: borderColors,
+                    borderWidth: 2,
+                    borderRadius: 6,
+                    yAxisID: 'yLeft',
+                    order: 2
+                },
+                {
+                    label: 'Łączne odsetki (PLN)',
+                    data: interestData,
+                    type: 'line',
+                    borderColor: '#6366F1',
+                    backgroundColor: 'rgba(99,102,241,0.12)',
+                    borderWidth: 2.5,
+                    pointBackgroundColor: '#6366F1',
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                    fill: true,
+                    tension: 0.35,
+                    yAxisID: 'yRight',
+                    order: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        font: { family: 'Inter', size: 11, weight: '500' },
+                        usePointStyle: true,
+                        boxWidth: 8
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ` ${ctx.dataset.label}: ${formatCurrencyValue(ctx.raw)}`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { family: 'Inter', size: 10 } }
+                },
+                yLeft: {
+                    position: 'left',
+                    ticks: {
+                        callback: v => formatCurrencyValue(v),
+                        font: { size: 10 }
+                    },
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                },
+                yRight: {
+                    position: 'right',
+                    ticks: {
+                        callback: v => formatCurrencyValue(v),
+                        font: { size: 10 }
+                    },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+}
+
+function renderSensitivityBars(results, baseResult) {
+    const container = document.getElementById('stress-sensitivity-rows');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const up1 = results.find(r => r.key === 'up1');
+    const baseInstalment = baseResult ? baseResult.firstInstalment : 0;
+    const up1Instalment = up1 ? up1.firstInstalment : 0;
+    const sensitivityPer1pp = Math.abs(up1Instalment - baseInstalment);
+
+    // Build bars for each scenario vs base
+    const toShow = results.filter(r => r.key !== 'base');
+    const maxDiff = Math.max(...toShow.map(r => Math.abs(r.firstInstalment - baseInstalment)), 1);
+
+    toShow.forEach(res => {
+        const diff = res.firstInstalment - baseInstalment;
+        const pct = Math.min(100, Math.abs(diff) / maxDiff * 100);
+        const isUp = diff > 0;
+
+        const fillColor = isUp
+            ? (Math.abs(res.delta) >= 2 ? '#EF4444' : '#F97316')
+            : '#10B981';
+
+        const row = document.createElement('div');
+        row.className = 'sensitivity-row';
+        row.innerHTML = `
+            <span class="sensitivity-row-label">${res.label}</span>
+            <div class="sensitivity-bar-track">
+                <div class="sensitivity-bar-fill" style="width:${pct}%; background:${fillColor};"></div>
+            </div>
+            <span class="sensitivity-row-val" style="color:${isUp ? '#FCA5A5' : '#6EE7B7'};">${isUp ? '+' : ''}${formatPLN(diff)}</span>
+        `;
+        container.appendChild(row);
+    });
+
+    // Sensitivity stat
+    if (sensitivityPer1pp > 0) {
+        const hint = document.createElement('div');
+        hint.style.cssText = 'margin-top:0.75rem; padding:0.5rem 0.75rem; background:rgba(255,255,255,0.06); border-radius:6px; font-size:0.75rem; color:#CBD5E1; line-height:1.5;';
+        hint.innerHTML = `💡 Każdy wzrost WIBOR o <strong style="color:white">1 p.p.</strong> zwiększa Twoją ratę o <strong style="color:#FCA5A5">${formatPLN(sensitivityPer1pp)}</strong>/miesiąc.`;
+        container.appendChild(hint);
+    }
+}
+
+// ----- Rate Schedule UI -----
+
+function renderRateScheduleList() {
+    const container = document.getElementById('rate-schedule-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (stressState.rateSchedule.length === 0) {
+        container.innerHTML = `<div style="font-size:0.75rem; color:var(--color-text-light); text-align:center; padding:0.5rem;">Brak wpisów – dodaj poniżej</div>`;
+        return;
+    }
+
+    stressState.rateSchedule.forEach((entry, idx) => {
+        const item = document.createElement('div');
+        item.className = 'rate-schedule-item';
+        item.innerHTML = `
+            <span class="rsi-year">${entry.year}</span>
+            <div class="rsi-rate-wrap">
+                <input type="number" class="rsi-input" step="0.01" min="0" max="30"
+                       value="${entry.rate.toFixed(2)}" data-idx="${idx}" title="Stawka WIBOR w roku ${entry.year}">
+                <span class="rsi-unit">% WIBOR</span>
+            </div>
+            <button class="rsi-remove" data-idx="${idx}" title="Usuń">&times;</button>
+        `;
+
+        // Live update on input change
+        item.querySelector('.rsi-input').addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            if (!isNaN(val)) stressState.rateSchedule[idx].rate = val;
+        });
+
+        item.querySelector('.rsi-remove').addEventListener('click', (e) => {
+            stressState.rateSchedule.splice(idx, 1);
+            renderRateScheduleList();
+        });
+
+        container.appendChild(item);
+    });
+}
+
+function addRateScheduleEntry() {
+    const currentYear = new Date().getFullYear();
+    const lastYear = stressState.rateSchedule.length > 0
+        ? Math.max(...stressState.rateSchedule.map(e => e.year))
+        : currentYear;
+    const nextYear = lastYear + 1;
+
+    // Default rate: current WIBOR or 4%
+    const defaultRate = parseFloat(els.wiborInput.value) || 4.0;
+    stressState.rateSchedule.push({ year: nextYear, rate: parseFloat(defaultRate.toFixed(2)) });
+    renderRateScheduleList();
+}
+
+// ----- Quick Scenario Button handlers -----
+
+function setupStressTestListeners() {
+    // Toggle panel open/close
+    const toggleBtn = document.getElementById('stress-toggle-btn');
+    const toggleBody = document.getElementById('stress-toggle-body');
+    const toggleIcon = document.getElementById('stress-toggle-icon');
+
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+            const isOpen = toggleBody.classList.contains('open');
+            toggleBody.classList.toggle('open', !isOpen);
+            toggleIcon.classList.toggle('open', !isOpen);
+        });
+    }
+
+    // Add rate schedule entry
+    const btnAddRate = document.getElementById('btn-add-rate-schedule');
+    if (btnAddRate) btnAddRate.addEventListener('click', addRateScheduleEntry);
+
+    // Run stress test button
+    const btnRun = document.getElementById('btn-run-stress-test');
+    if (btnRun) btnRun.addEventListener('click', runStressTest);
+
+    // Close results
+    const btnClose = document.getElementById('btn-close-stress');
+    if (btnClose) {
+        btnClose.addEventListener('click', () => {
+            const wrapper = document.getElementById('stress-results-wrapper');
+            if (wrapper) wrapper.style.display = 'none';
+        });
+    }
+
+    // Init empty rate schedule list
+    renderRateScheduleList();
+}
+

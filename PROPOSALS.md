@@ -4,11 +4,12 @@ Poniżej zebrano propozycje rozbudowy aplikacji, które pozwolą przekształcić
 
 ---
 
-## 1. Symulator Zmian Stóp Procentowych (Testy Warunków Skrajnych)
-*   **Opis:** WIBOR ulega ciągłym wahaniom. Wdrożenie testu warunków skrajnych pozwoli użytkownikowi sprawdzić odporność swojego budżetu domowego na zmiany stóp.
+## 1. [✓] Symulator Zmian Stóp Procentowych (Testy Warunków Skrajnych) — *ZREALIZOWANO*
+*   **Opis:** WIBOR ulega ciągłym wahaniom. Wdrożenie testu warunków skrajnych pozwala sprawdzić odporność budżetu domowego na zmiany stóp procentowych w przyszłości.
 *   **Funkcje:**
-    *   Szybkie scenariusze (np. wzrost stóp o 1 p.p., 2 p.p., 3 p.p., spadek o 1 p.p.).
-    *   Dynamiczny harmonogram stóp (możliwość zdefiniowania, że w roku X stopy wzrosną, a w roku Y spadną).
+    *   [✓] Porównanie symulacji: Scenariusz bazowy, WIBOR +1 p.p., +2 p.p., +3 p.p. oraz spadek o 1 p.p.
+    *   [✓] Dynamiczny harmonogram stóp: Definiowanie stawek WIBOR w rozbiciu na konkretne lata.
+    *   [✓] Analiza wrażliwości: Wykres dual-axis (Chart.js) oraz wskaźniki wzrostu raty na każdy 1 p.p. zmiany stóp.
 *   **Wartość:** Pokazuje, jak nadpłaty obniżają wrażliwość raty na przyszłe podwyżki stóp procentowych.
 
 ## 2. Analiza Inwestycyjna: Inwestowanie vs. Nadpłacanie

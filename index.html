@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kalkulator Kredytu Hipotecznego - Nadpłaty & Symulacja</title>
+    <title>Kalkulator Kredytu Hipotecznego - Nadpłaty, Symulacja & Stres-Test Stóp</title>
     
     <!-- Stylesheets -->
     <link rel="stylesheet" href="css/variables.css">
@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="css/calculator.css">
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/schedule.css">
+    <link rel="stylesheet" href="css/stress-test.css">
     
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -223,6 +224,44 @@
                         </button>
                     </div>
                 </section>
+
+                <!-- 4. Stress Test Card -->
+                <section class="card" id="stress-test-sidebar">
+                    <div class="stress-toggle-header" id="stress-toggle-btn">
+                        <h2 class="card-title" style="margin:0; border:none; padding:0; flex:1;">
+                            <!-- Icon Thermometer -->
+                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 00-5 0v11.26a4.5 4.5 0 105 0z"></path></svg>
+                            Stres-Test Stóp Procentowych
+                        </h2>
+                        <svg class="stress-toggle-icon" id="stress-toggle-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"></path></svg>
+                    </div>
+
+                    <div class="stress-toggle-body" id="stress-toggle-body">
+                        <p style="font-size:0.8125rem; color:var(--color-text-muted); margin: 0.75rem 0 1rem; line-height:1.5;">
+                            Sprawdź, jak zmiany WIBOR wpłyną na Twoje raty i całkowity koszt kredytu.
+                        </p>
+
+                        <div class="stress-section-divider">Dynamiczny harmonogram WIBOR</div>
+
+                        <p style="font-size:0.75rem; color:var(--color-text-muted); margin-bottom:0.5rem; line-height:1.4;">
+                            Zdefiniuj, kiedy i o ile zmienią się stopy procentowe w przyszłości:
+                        </p>
+
+                        <div id="rate-schedule-list" class="rate-schedule-list">
+                            <!-- Filled dynamically -->
+                        </div>
+
+                        <button type="button" class="btn-add-rate-schedule" id="btn-add-rate-schedule">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>
+                            Dodaj zmianę stóp
+                        </button>
+
+                        <button type="button" class="btn-primary" id="btn-run-stress-test" style="margin-top:0.875rem;">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:0.25rem;"><path d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            Uruchom Stres-Test
+                        </button>
+                    </div>
+                </section>
                 
             </aside>
             
@@ -365,6 +404,43 @@
                         </div>
                     </article>
                     
+                </div>
+
+                <!-- STRESS TEST RESULTS PANEL -->
+                <div id="stress-results-wrapper" style="display:none;">
+                    <div class="stress-results-card">
+                        <div class="stress-results-title">
+                            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            Wyniki Stres-Testu Stóp Procentowych
+                            <button type="button" id="btn-close-stress" style="margin-left:auto; background:none; border:none; cursor:pointer; color:var(--color-text-muted); font-size:1.25rem; line-height:1; padding:0.125rem 0.25rem; border-radius:4px; transition:var(--transition-fast);" title="Zamknij">&times;</button>
+                        </div>
+
+                        <div class="stress-active-badge" id="stress-active-badge">
+                            <span class="dot"></span>
+                            <span id="stress-active-label">Aktualny WIBOR: 3,86%</span>
+                        </div>
+
+                        <!-- Scenario Cards Row -->
+                        <div class="stress-scenario-cards" id="stress-scenario-cards">
+                            <!-- Filled dynamically -->
+                        </div>
+
+                        <!-- Sensitivity Chart -->
+                        <div style="margin-top:0.25rem;">
+                            <p class="form-label" style="margin-bottom:0.75rem; font-size:0.8rem;">Porównanie raty miesięcznej wg scenariusza WIBOR</p>
+                            <div class="stress-chart-container">
+                                <canvas id="chart-stress-scenarios"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Sensitivity Insight Bars -->
+                        <div class="sensitivity-bar-wrap" id="stress-sensitivity-bars">
+                            <div class="sensitivity-bar-title">🔥 Wrażliwość raty na zmianę WIBOR o 1 p.p.</div>
+                            <div class="sensitivity-bars" id="stress-sensitivity-rows">
+                                <!-- Filled dynamically -->
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- AMORTIZATION TABLE (Harmonogram) -->

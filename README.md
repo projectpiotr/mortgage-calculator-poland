@@ -19,6 +19,11 @@ Projekt został zbudowany z myślą o profesjonalnej estetyce budzącej zaufanie
     *   Wykres skumulowany roczny (koszty kapitałowe, odsetkowe i nadpłaty).
     *   Wykres liniowy porównujący tempo spłaty zadłużenia (porównanie ścieżki z nadpłatami vs. bez nadpłat).
 7.  **Dymki edukacyjne:** Wyjaśnienia pojęć finansowych (WIBOR, marża, kapitał) po najechaniu na ikonę informacyjną `(i)`.
+8.  **Stres-Test Stóp Procentowych (Symulacja Scenariuszy Skrajnych):**
+    *   Uruchamianie symulacji wpływu wahań stóp procentowych na wysokość rat i sumaryczne koszty kredytu.
+    *   Dynamiczny harmonogram stóp: Użytkownik może samodzielnie zdefiniować planowane zmiany stawek WIBOR w konkretnych latach.
+    *   Prezentacja wyników za pomocą czytelnego wykresu porównawczego (Chart.js) oraz panelu kart scenariuszy (Base, +1 p.p., +2 p.p., +3 p.p., -1 p.p. oraz Harmonogram dynamiczny).
+    *   Wskaźnik wrażliwości budżetu na zmianę stóp o każdy 1 p.p.
 
 ---
 
@@ -30,12 +35,14 @@ Aplikacja została zaprojektowana w sposób modułowy, a na koniec zunifikowana 
 mój-kalkulator-kredytowy/
 ├── index.html                  # Główny szkielet i struktura interfejsu użytkownika
 ├── README.md                   # Niniejsza dokumentacja techniczna i użytkowa
+├── PROPOSALS.md                # Kierunki rozwoju i propozycje rozbudowy aplikacji
 ├── css/
 │   ├── variables.css          # Zmienne CSS, kolory budzące zaufanie, typografia
 │   ├── main.css               # Reset stylów, globalne reguły układu i powiadomienia (toast)
 │   ├── calculator.css         # Style formularzy wejściowych, suwaków i przełączników
 │   ├── dashboard.css          # Style paneli KPI, paska podziału kapitał/odsetki
-│   └── schedule.css           # Stylizacja tabeli amortyzacyjnej, paginacji i modali
+│   ├── schedule.css           # Stylizacja tabeli amortyzacyjnej, paginacji i modali
+│   └── stress-test.css        # [NOWY] Style dla modułu stres-testów stóp procentowych
 └── js/
     ├── app.js                 # [GŁÓWNY] Zunifikowany skrypt całej aplikacji (działa offline i przez file://)
     # Poniższe pliki to oryginalne moduły, zachowane dla czytelności i łatwości utrzymania:
@@ -67,6 +74,28 @@ Gdzie:
 3.  **Wpływ nadpłaty $O_t$:**
     Nowe saldo zadłużenia na koniec miesiąca wynosi:
     $$S_t = S_{t-1} - (C_t + O_t)$$
+
+---
+
+## Architektura i Działanie Aplikacji
+
+Aplikacja opiera się na architekturze typu **Zero-Server SPA** – działa w 100% po stronie przeglądarki użytkownika.
+
+### 1. Podział i Organizacja Kodu JavaScript (`js/app.js`)
+Główna logika aplikacji została zunifikowana w jednym pliku `js/app.js`, aby wyeliminować blokady CORS w przeglądarkach przy uruchomieniu przez protokół `file://`. Logika ta dzieli się na sekcje:
+*   **Globalny Stan (`state` i `stressState`)**: Przechowuje aktualny tryb oprocentowania, listę zdefiniowanych nadpłat jednorazowych, pobrane stawki WIBOR oraz harmonogram zmian stóp w kolejnych latach dla stres-testu.
+*   **WIBOR Service**: Pobiera stawki live z GPW Benchmark (przez 3 kaskadowe serwery proxy CORS) z automatycznym fallbackiem offline.
+*   **Silnik Matematyczny (`generateMortgageSchedules`)**: Wylicza harmonogramy spłaty kredytu w dwóch wariantach równolegle (bez nadpłat oraz z nadpłatami) na podstawie wzoru na raty annuitetowe (równe).
+*   **Moduł Stres-Testu**: Uruchamia symulację dla 5 scenariuszy statycznych (bazowy, +1, +2, +3, -1 p.p.) oraz scenariusza dynamicznego. Wylicza ratę oraz skumulowane odsetki dla każdego wariantu i generuje dwuosiowy wykres (Dual-Axis Bar & Line Chart) za pomocą `Chart.js`.
+
+### 2. Rozwiązanie Problemu CORS dla Plików Lokalnych
+Przy próbie wczytania pliku z konfiguracją testową (`js/test-config.json`) przez protokół `file://`, przeglądarki mogą rzucić błąd CORS. Aby przycisk **„⚡ Wczytaj moje dane”** działał zawsze niezawodnie, wdrożono mechanizm awaryjny:
+*   Funkcja `checkAndEnableTestData()` próbuje pobrać plik konfiguracyjny z dysku.
+*   Jeżeli przeglądarka zablokuje zapytanie `fetch()`, kod przechwytuje wyjątek i wstrzykuje do formularza wbudowaną, zapasową konfigurację danych testowych.
+
+### 3. Przepływ Danych w Stres-Teście Dynamicznym
+*   Gdy użytkownik zdefiniuje roczny harmonogram WIBOR, funkcja `runDynamicScenarioCalc()` symuluje spłatę kredytu miesiąc po miesiącu.
+*   Dla każdego miesiąca silnik obliczeniowy sprawdza rok spłaty – jeśli dla tego roku zdefiniowano stawkę w harmonogramie, silnik nadpisuje WIBOR bazowy. Następnie rekalkuluje odsetki oraz wysokość raty (jeżeli włączona jest opcja zmniejszania raty zamiast skracania okresu).
 
 ---
 
