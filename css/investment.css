@@ -1,0 +1,210 @@
+/* ============================================
+   INVESTMENT VS OVERPAYMENT ANALYSIS STYLES
+   ============================================ */
+
+.investment-results-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-md);
+    animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.investment-results-title {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 0.75rem;
+}
+
+.investment-results-title svg {
+    color: var(--color-success);
+    flex-shrink: 0;
+}
+
+/* KPI Summary Grid */
+.investment-kpis-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.investment-kpi-card {
+    padding: 1.25rem;
+    border-radius: var(--radius-md);
+    border: 1.5px solid var(--color-border);
+    position: relative;
+    overflow: hidden;
+    background: var(--color-surface);
+    transition: all var(--transition-normal);
+}
+
+.investment-kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3.5px;
+    background: var(--color-border);
+}
+
+.investment-kpi-card.better {
+    background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+    border-color: #A7F3D0;
+}
+.investment-kpi-card.better::before {
+    background: #10B981;
+}
+
+.investment-kpi-card.worse {
+    background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%);
+    border-color: #E2E8F0;
+    opacity: 0.85;
+}
+.investment-kpi-card.worse::before {
+    background: #94A3B8;
+}
+
+.investment-kpi-card.result-net {
+    background: linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%);
+    border-color: #BAE6FD;
+}
+.investment-kpi-card.result-net::before {
+    background: #0EA5E9;
+}
+
+.investment-kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+
+.investment-kpi-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    margin-bottom: 0.375rem;
+}
+
+.investment-kpi-value {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+    margin-bottom: 0.5rem;
+}
+
+.investment-kpi-desc {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    line-height: 1.3;
+}
+
+/* Advisory Recommendation Callout Box */
+.investment-recommendation-box {
+    padding: 1.25rem;
+    border-radius: var(--radius-md);
+    background-color: #F8FAFC;
+    border-left: 4px solid var(--color-accent);
+    margin-bottom: 1.5rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.investment-recommendation-box.better-invest {
+    border-left-color: #3B82F6;
+    background-color: #EFF6FF;
+}
+
+.investment-recommendation-box.better-overpay {
+    border-left-color: #10B981;
+    background-color: #ECFDF5;
+}
+
+.investment-rec-title {
+    font-weight: 700;
+    color: var(--color-text-main);
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.investment-rec-text {
+    color: var(--color-text-main);
+}
+
+/* Chart container styles */
+.investment-chart-container {
+    height: 300px;
+    position: relative;
+    margin-top: 1rem;
+}
+
+/* Simple toggle switch layout for forms */
+.toggle-switch-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+}
+
+.toggle-switch-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-text-main);
+}
+
+/* --- Layperson Simple Comparison --- */
+.rec-simple-comparison {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+    background: white;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    border: 1px dashed var(--color-border);
+}
+
+.rec-comparison-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.rec-comparison-item .label {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+}
+
+.rec-comparison-item .value {
+    font-size: 1.125rem;
+    font-weight: 700;
+}
+
+.rec-comparison-item .value.value-danger {
+    color: var(--color-danger);
+}
+
+.rec-comparison-item .value.value-success {
+    color: var(--color-success);
+}
+
+.rec-comparison-item-vs {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-text-light);
+    text-transform: uppercase;
+    background: var(--color-bg);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}

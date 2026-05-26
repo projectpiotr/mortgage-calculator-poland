@@ -12,12 +12,13 @@ Poniżej zebrano propozycje rozbudowy aplikacji, które pozwolą przekształcić
     *   [✓] Analiza wrażliwości: Wykres dual-axis (Chart.js) oraz wskaźniki wzrostu raty na każdy 1 p.p. zmiany stóp.
 *   **Wartość:** Pokazuje, jak nadpłaty obniżają wrażliwość raty na przyszłe podwyżki stóp procentowych.
 
-## 2. Analiza Inwestycyjna: Inwestowanie vs. Nadpłacanie
+## 2. [✓] Analiza Inwestycyjna: Inwestowanie vs. Nadpłacanie — *ZREALIZOWANO*
 *   **Opis:** Częsty dylemat finansowy: *„Czy nadpłacać kredyt oprocentowany na X%, czy odkładać te same środki na lokatę/ETF-y zarabiające Y%?”*.
 *   **Funkcje:**
-    *   Wprowadzenie oczekiwanej rocznej stopy zwrotu z alternatywnej inwestycji.
-    *   Automatyczne uwzględnienie 19% podatku Belki dla zysków kapitałowych w Polsce.
-    *   Zestawienie skumulowanych zysków z inwestycji vs. oszczędności odsetkowych z nadpłat.
+    *   [✓] Wprowadzenie oczekiwanej rocznej stopy zwrotu z alternatywnej inwestycji w nowym panelu bocznym.
+    *   [✓] Opcja automatycznego uwzględnienia 19% podatku Belki (podatku od zysków kapitałowych).
+    *   [✓] Precyzyjny silnik matematyczny oparty na horyzoncie nominalnego okresu spłaty kredytu, uwzględniający inwestowanie uwolnionych rat po wcześniejszej spłacie długu.
+    *   [✓] Dedykowana sekcja wyników z podsumowaniem KPI, dynamiczną pisemną rekomendacją i wykresem liniowym wzrostu majątku.
 *   **Wartość:** Pomaga podjąć racjonalną, matematycznie uzasadnioną decyzję o alokacji wolnego kapitału.
 
 ## 3. Koszty Okołokredytowe i Pełne RRSO

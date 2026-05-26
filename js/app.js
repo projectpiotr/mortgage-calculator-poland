@@ -15,7 +15,7 @@ const FALLBACK_WIBOR = {
 };
 
 const state = {
-    fetchedWibor: null,
+    fetchedWibor: FALLBACK_WIBOR,
     customOverpayments: [],
     currentPage: 1,
     pageSize: 12,
@@ -729,24 +729,37 @@ window.addEventListener('DOMContentLoaded', async () => {
         interestTypeFixed: document.getElementById('interest-type-fixed'),
         variableRateFields: document.getElementById('variable-rate-fields'),
         fixedRateFields: document.getElementById('fixed-rate-fields'),
-        fixedRateInput: document.getElementById('fixed-rate')
+        fixedRateInput: document.getElementById('fixed-rate'),
+        tabBtns: document.querySelectorAll('.tab-btn'),
+        tabContents: document.querySelectorAll('.tab-content'),
+        investmentReturnInput: document.getElementById('investment-return-rate'),
+        investmentBelkaTaxCheckbox: document.getElementById('investment-belka-tax'),
+        btnRunInvestment: document.getElementById('btn-run-investment-analysis'),
+        investmentResultsWrapper: document.getElementById('investment-results-wrapper'),
+        btnCloseInvestment: document.getElementById('btn-close-investment'),
+        investmentRecBox: document.getElementById('investment-rec-box'),
+        investmentRecTitle: document.getElementById('investment-rec-title'),
+        investmentRecText: document.getElementById('investment-rec-text'),
+        investmentKpisGrid: document.getElementById('investment-kpis-grid'),
+        investmentCanvas: document.getElementById('chart-investment-comparison')
     };
 
     setDefaultValues();
     setupEventListeners();
-    await handleWiborFetch();
+    handleWiborFetch(); // Run in the background without blocking DOMContentLoaded
     loadStateFromLocalStorage();
     await checkAndEnableTestData();
     recalculate();
     initTooltips();
-    setupStressTestListeners();
+    setupTabListeners();
+    setupInvestmentListeners();
 });
-
 async function checkAndEnableTestData() {
     let config = {
         principal: "561110.95",
         months: "251",
-        margin: "1.99"
+        margin: "1.99",
+        overpayment: "2000"
     };
     
     try {
@@ -793,6 +806,7 @@ async function checkAndEnableTestData() {
             els.endDateInputGroup.style.display = 'none';
             updateEndDateFromMonths();
         }
+        els.overpaymentBaseInput.value = config.overpayment || '2000';
         
         state.interestType = 'variable';
         els.interestTypeVariable.classList.add('active');
@@ -919,7 +933,14 @@ function loadStateFromLocalStorage() {
 function setDefaultValues() {
     els.principalInput.value = '';
     els.marginInput.value = '';
-    els.wiborInput.value = '';
+    
+    // Set default WIBOR rate to 3.86 in custom mode
+    els.wiborInput.value = '3.86';
+    els.wiborInput.removeAttribute('readonly');
+    els.wiborTermSelector.querySelectorAll('.wibor-btn').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-term') === 'custom');
+    });
+    
     els.fixedRateInput.value = '';
     
     // Reset interest type to Variable
@@ -928,9 +949,6 @@ function setDefaultValues() {
     els.interestTypeFixed.classList.remove('active');
     els.variableRateFields.style.display = 'block';
     els.fixedRateFields.style.display = 'none';
-    
-    // Remove active class from all wibor selector buttons initially
-    els.wiborTermSelector.querySelectorAll('.wibor-btn').forEach(b => b.classList.remove('active'));
     
     els.startMonthInput.value = '2026-06';
     els.durationModeSelect.value = 'months';
@@ -1138,6 +1156,14 @@ function setupEventListeners() {
     if (els.btnExportWordTop) {
         els.btnExportWordTop.addEventListener('click', exportScheduleToWord);
     }
+    
+    // Recalculate automatically when investment parameters change
+    if (els.investmentReturnInput) {
+        els.investmentReturnInput.addEventListener('input', recalculate);
+    }
+    if (els.investmentBelkaTaxCheckbox) {
+        els.investmentBelkaTaxCheckbox.addEventListener('change', recalculate);
+    }
 }
 
 function updateEndDateFromMonths() {
@@ -1244,6 +1270,10 @@ function recalculate() {
     updateDashboardUI(calculation);
     renderMortgageCharts(els.costCanvas, els.balanceCanvas, calculation);
     updateTableOnly();
+
+    // Auto-calculate stress test and investment in background
+    runStressTest(true);
+    runInvestmentAnalysis(true);
 }
 
 function updateDashboardUI(calc) {
@@ -1951,18 +1981,11 @@ ${loanBalanceChartBase64}
 
 let stressChartInstance = null;
 
-const stressState = {
-    rateSchedule: []     // [{ year: 2027, rate: 5.5 }, ...]
-};
-
 /**
  * Build stress scenarios to display.
- * Always includes the base (current WIBOR + margin), plus dynamic-schedule if set.
+ * Always includes the base (current WIBOR + margin).
  */
 function buildStressScenarios(baseWibor, margin) {
-    const baseTotalRate = baseWibor + margin;
-    const deltas = [3, 2, 1, -1];
-
     // Quick scenario list (base + predefined deltas)
     const scenarios = [
         { key: 'base',  label: 'Aktualny WIBOR', delta: 0,  cssClass: 'base' },
@@ -1972,28 +1995,13 @@ function buildStressScenarios(baseWibor, margin) {
         { key: 'down1', label: 'WIBOR −1 p.p.',  delta: -1, cssClass: 'down1' },
     ];
 
-    // If we have a dynamic rate schedule, add it as "custom"
-    if (stressState.rateSchedule.length > 0) {
-        // Weighted-average effective rate across the entire schedule
-        const avgScheduleWibor = stressState.rateSchedule.reduce((a, b) => a + b.rate, 0) / stressState.rateSchedule.length;
-        const avgDelta = avgScheduleWibor - baseWibor;
-        scenarios.push({
-            key: 'custom',
-            label: 'Harmonogram dynamiczny',
-            delta: parseFloat(avgDelta.toFixed(2)),
-            cssClass: 'custom',
-            isDynamic: true
-        });
-    }
-
     return scenarios.map(s => {
         const scenarioWibor = Math.max(0, baseWibor + s.delta);
-        const result = {
+        return {
             ...s,
             wibor: scenarioWibor,
             totalRate: scenarioWibor + margin
         };
-        return result;
     });
 }
 
@@ -2023,100 +2031,6 @@ function runScenarioCalc(wiborValue) {
     });
 }
 
-/**
- * Run dynamic schedule scenario — uses month-by-month WIBOR from stressState.rateSchedule.
- * Falls back to baseWibor for months beyond the schedule.
- */
-function runDynamicScenarioCalc(baseWibor, margin) {
-    const principal = parseFloat(els.principalInput.value) || 0;
-    const monthsRemaining = parseInt(els.monthsInput.value) || 0;
-    const startMonthYear = els.startMonthInput.value;
-    const monthlyOverpayment = parseFloat(els.overpaymentBaseInput.value) || 0;
-    const overpaymentImpact = els.overpaymentImpactDuration.checked ? 'reduce_duration' : 'reduce_instalment';
-
-    if (!principal || !monthsRemaining || stressState.rateSchedule.length === 0) return null;
-
-    // Build year->rate map
-    const yearRateMap = {};
-    stressState.rateSchedule.forEach(entry => {
-        yearRateMap[entry.year] = entry.rate;
-    });
-
-    const [startYear] = (startMonthYear || '').split('-').map(Number);
-
-    // We'll compute a custom schedule with per-month WIBOR
-    const customSchedule = [];
-    let balance = principal;
-    let totalInterest = 0, totalCapital = 0, totalOverpayments = 0;
-
-    const customOverpaymentMap = new Map();
-    state.customOverpayments.forEach(co => customOverpaymentMap.set(co.monthIndex, co.amount));
-
-    const [sy, sm] = (startMonthYear || '').split('-').map(Number);
-
-    // Initial instalment from base rate
-    const baseMonthlyRate = (baseWibor + margin) / 100 / 12;
-    let currentInstalment = calculateAnnuityInstalment(principal, baseMonthlyRate, monthsRemaining);
-
-    for (let i = 0; i < monthsRemaining * 2; i++) {
-        if (balance < 0.01) break;
-
-        // Determine year for this month
-        const totalM = (sm - 1) + i;
-        const currentYear = sy + Math.floor(totalM / 12);
-        const currentMonthNum = (totalM % 12) + 1;
-
-        // WIBOR for this month
-        const wiborForYear = yearRateMap[currentYear] !== undefined ? yearRateMap[currentYear] : baseWibor;
-        const annualRate = (wiborForYear + margin) / 100;
-        const monthlyRate = annualRate / 12;
-
-        const interest = balance * monthlyRate;
-
-        let scheduledInstalment = currentInstalment;
-        if (overpaymentImpact === 'reduce_instalment') {
-            const remMonths = Math.max(1, monthsRemaining - i);
-            scheduledInstalment = calculateAnnuityInstalment(balance, monthlyRate, remMonths);
-            currentInstalment = scheduledInstalment;
-        }
-
-        let capital = scheduledInstalment - interest;
-        if (capital < 0) capital = 0;
-        if (balance - capital < 0.01) capital = balance;
-
-        let overpayment = monthlyOverpayment + (customOverpaymentMap.get(i + 1) || 0);
-        const remAfterCapital = Math.max(0, balance - capital);
-        if (overpayment > remAfterCapital) overpayment = remAfterCapital;
-
-        balance -= (capital + overpayment);
-        totalInterest += interest;
-        totalCapital += capital;
-        totalOverpayments += overpayment;
-
-        const monthPad = String(currentMonthNum).padStart(2, '0');
-        customSchedule.push({
-            nr: i + 1,
-            monthLabel: `${monthPad}-${currentYear}`,
-            capitalPaid: capital,
-            interestPaid: interest,
-            instalment: capital + interest,
-            overpayment,
-            totalCost: capital + interest + overpayment,
-            balance: balance < 0.01 ? 0 : balance
-        });
-    }
-
-    return {
-        firstInstalment: customSchedule.length > 0 ? customSchedule[0].instalment : 0,
-        totalInterest,
-        totalCapital,
-        totalOverpayments,
-        totalCost: totalCapital + totalInterest + totalOverpayments,
-        duration: customSchedule.length,
-        schedule: customSchedule
-    };
-}
-
 /** Format rate in Polish style */
 function fmtRate(r) {
     return r.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
@@ -2125,7 +2039,8 @@ function fmtRate(r) {
 /**
  * Main entry: run the full stress test and render all results.
  */
-function runStressTest() {
+function runStressTest(preventScroll = false) {
+    const shouldPreventScroll = preventScroll === true;
     const principal = parseFloat(els.principalInput.value) || 0;
     const margin = state.interestType === 'fixed' ? 0 : (parseFloat(els.marginInput.value) || 0);
     const monthsRemaining = parseInt(els.monthsInput.value) || 0;
@@ -2138,7 +2053,9 @@ function runStressTest() {
     }
 
     if (!principal || !monthsRemaining || (!baseWibor && state.interestType !== 'fixed')) {
-        showToast('Uzupełnij parametry kredytu przed uruchomieniem stres-testu.', 'warning');
+        if (!shouldPreventScroll) {
+            showToast('Uzupełnij parametry kredytu przed uruchomieniem symulacji.', 'warning');
+        }
         return;
     }
 
@@ -2146,13 +2063,7 @@ function runStressTest() {
 
     // Run calcs for each scenario
     const scenarioResults = scenarios.map(s => {
-        let calc;
-        if (s.isDynamic) {
-            const dynResult = runDynamicScenarioCalc(baseWibor, margin);
-            if (!dynResult) return { ...s, firstInstalment: 0, totalInterest: 0, totalCost: 0, duration: 0 };
-            return { ...s, firstInstalment: dynResult.firstInstalment, totalInterest: dynResult.totalInterest, totalCost: dynResult.totalCost, duration: dynResult.duration };
-        }
-        calc = runScenarioCalc(s.totalRate);
+        const calc = runScenarioCalc(s.totalRate);
         if (!calc) return { ...s, firstInstalment: 0, totalInterest: 0, totalCost: 0, duration: 0 };
         const firstInstalment = calc.overpaid.schedule.length > 0 ? calc.overpaid.schedule[0].instalment : 0;
         return { ...s, firstInstalment, totalInterest: calc.overpaid.totalInterest, totalCost: calc.overpaid.totalCost, duration: calc.overpaid.duration };
@@ -2175,14 +2086,15 @@ function runStressTest() {
     // Render sensitivity bars
     renderSensitivityBars(scenarioResults, baseResult);
 
-    // Show results
+    // Show results / scroll if manually clicked
     const wrapper = document.getElementById('stress-results-wrapper');
-    if (wrapper) {
-        wrapper.style.display = 'block';
+    if (wrapper && !shouldPreventScroll) {
         wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    showToast('Stres-test zakończony! Wyniki poniżej wykresów.', 'success');
+    if (!shouldPreventScroll) {
+        showToast('Analiza wpływu zmiany wskaźnika zakończona! Wyniki widoczne są poniżej.', 'success');
+    }
 }
 
 function renderStressScenarioCards(results, baseResult) {
@@ -2375,93 +2287,374 @@ function renderSensitivityBars(results, baseResult) {
     }
 }
 
-// ----- Rate Schedule UI -----
 
-function renderRateScheduleList() {
-    const container = document.getElementById('rate-schedule-list');
-    if (!container) return;
-    container.innerHTML = '';
 
-    if (stressState.rateSchedule.length === 0) {
-        container.innerHTML = `<div style="font-size:0.75rem; color:var(--color-text-light); text-align:center; padding:0.5rem;">Brak wpisów – dodaj poniżej</div>`;
-        return;
-    }
 
-    stressState.rateSchedule.forEach((entry, idx) => {
-        const item = document.createElement('div');
-        item.className = 'rate-schedule-item';
-        item.innerHTML = `
-            <span class="rsi-year">${entry.year}</span>
-            <div class="rsi-rate-wrap">
-                <input type="number" class="rsi-input" step="0.01" min="0" max="30"
-                       value="${entry.rate.toFixed(2)}" data-idx="${idx}" title="Stawka WIBOR w roku ${entry.year}">
-                <span class="rsi-unit">% WIBOR</span>
-            </div>
-            <button class="rsi-remove" data-idx="${idx}" title="Usuń">&times;</button>
-        `;
+// ==========================================
+// 9. INVESTMENT MODULE
+// ==========================================
 
-        // Live update on input change
-        item.querySelector('.rsi-input').addEventListener('input', (e) => {
-            const val = parseFloat(e.target.value);
-            if (!isNaN(val)) stressState.rateSchedule[idx].rate = val;
+let investmentChartInstance = null;
+
+function setupTabListeners() {
+    const btns = els.tabBtns;
+    const contents = els.tabContents;
+    
+    if (!btns || !contents) return;
+
+    btns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetTab = btn.getAttribute('data-tab');
+            
+            // Toggle active buttons
+            btns.forEach(b => b.classList.toggle('active', b === btn));
+            
+            // Toggle active contents in sidebar
+            contents.forEach(content => {
+                const isTarget = content.id === `tab-content-${targetTab}`;
+                content.classList.toggle('active', isTarget);
+            });
+
+            // Toggle active contents in main results column
+            const resultBas = document.getElementById('results-content-basic');
+            const resultStr = document.getElementById('stress-results-wrapper');
+            const resultInv = document.getElementById('investment-results-wrapper');
+
+            if (resultBas && resultStr && resultInv) {
+                resultBas.classList.toggle('active', targetTab === 'basic');
+                resultStr.classList.toggle('active', targetTab === 'stress');
+                resultInv.classList.toggle('active', targetTab === 'investment');
+
+                // Auto-run calculations if parameters are already filled in the main form
+                const hasValidParams = parseFloat(els.principalInput.value) > 0 && parseInt(els.monthsInput.value) > 0;
+                
+                if (hasValidParams) {
+                    if (targetTab === 'stress') {
+                        runStressTest(true);
+                    } else if (targetTab === 'investment') {
+                        runInvestmentAnalysis(true);
+                    }
+                }
+            }
         });
-
-        item.querySelector('.rsi-remove').addEventListener('click', (e) => {
-            stressState.rateSchedule.splice(idx, 1);
-            renderRateScheduleList();
-        });
-
-        container.appendChild(item);
     });
 }
 
-function addRateScheduleEntry() {
-    const currentYear = new Date().getFullYear();
-    const lastYear = stressState.rateSchedule.length > 0
-        ? Math.max(...stressState.rateSchedule.map(e => e.year))
-        : currentYear;
-    const nextYear = lastYear + 1;
-
-    // Default rate: current WIBOR or 4%
-    const defaultRate = parseFloat(els.wiborInput.value) || 4.0;
-    stressState.rateSchedule.push({ year: nextYear, rate: parseFloat(defaultRate.toFixed(2)) });
-    renderRateScheduleList();
-}
-
-// ----- Quick Scenario Button handlers -----
-
-function setupStressTestListeners() {
-    // Toggle panel open/close
-    const toggleBtn = document.getElementById('stress-toggle-btn');
-    const toggleBody = document.getElementById('stress-toggle-body');
-    const toggleIcon = document.getElementById('stress-toggle-icon');
-
-    if (toggleBtn) {
-        toggleBtn.addEventListener('click', () => {
-            const isOpen = toggleBody.classList.contains('open');
-            toggleBody.classList.toggle('open', !isOpen);
-            toggleIcon.classList.toggle('open', !isOpen);
-        });
-    }
-
-    // Add rate schedule entry
-    const btnAddRate = document.getElementById('btn-add-rate-schedule');
-    if (btnAddRate) btnAddRate.addEventListener('click', addRateScheduleEntry);
-
-    // Run stress test button
-    const btnRun = document.getElementById('btn-run-stress-test');
-    if (btnRun) btnRun.addEventListener('click', runStressTest);
-
-    // Close results
-    const btnClose = document.getElementById('btn-close-stress');
+function setupInvestmentListeners() {
+    const btnRun = els.btnRunInvestment;
+    if (btnRun) btnRun.addEventListener('click', () => runInvestmentAnalysis(false));
+    
+    const btnClose = els.btnCloseInvestment;
     if (btnClose) {
         btnClose.addEventListener('click', () => {
-            const wrapper = document.getElementById('stress-results-wrapper');
-            if (wrapper) wrapper.style.display = 'none';
+            if (els.investmentResultsWrapper) {
+                els.investmentResultsWrapper.classList.remove('active');
+            }
         });
     }
+}
 
-    // Init empty rate schedule list
-    renderRateScheduleList();
+function runInvestmentAnalysis(preventScroll = false) {
+    const shouldPreventScroll = preventScroll === true;
+    if (!state.activeCalculation) {
+        recalculate();
+    }
+    
+    const baseCalc = state.activeCalculation.standard;
+    const overpaidCalc = state.activeCalculation.overpaid;
+    
+    if (!baseCalc || !overpaidCalc || baseCalc.schedule.length === 0) {
+        if (!shouldPreventScroll) {
+            showToast('Brak danych do analizy. Upewnij się, że wprowadzono prawidłowe parametry kredytu.', 'warning');
+        }
+        return;
+    }
+
+    const T = baseCalc.duration; // nominalny okres spłaty (liczba rat bez nadpłat)
+    const T_nadp = overpaidCalc.duration; // okres spłaty z nadpłatami
+
+    const annualReturn = parseFloat(els.investmentReturnInput.value) || 6.0;
+    const useBelka = els.investmentBelkaTaxCheckbox.checked;
+    
+    // Stopa miesięczna
+    const effectiveAnnual = useBelka ? annualReturn * 0.81 : annualReturn;
+    const monthlyRate = (effectiveAnnual / 100) / 12;
+
+    let v_inv = 0; // wariant 1: inwestowanie nadpłat
+    let v_overpay = 0; // wariant 2: nadpłacanie kredytu, a po spłacie inwestowanie uwolnionej raty
+
+    const history_inv = [];
+    const history_overpay = [];
+    const labels = [];
+
+    let sumOverpaymentsW1 = 0;
+    let sumInvestmentsW2 = 0;
+
+    for (let m = 1; m <= T; m++) {
+        // Wariant 1: Inwestowanie nadpłat
+        const overpaidRow = overpaidCalc.schedule[m - 1];
+        const overpayment = overpaidRow ? overpaidRow.overpayment : 0;
+        sumOverpaymentsW1 += overpayment;
+        
+        v_inv = v_inv * (1 + monthlyRate) + overpayment;
+
+        // Wariant 2: Nadpłacanie kredytu i inwestowanie wolnej raty po spłacie
+        let savedRata = 0;
+        if (m > T_nadp) {
+            const baseRow = baseCalc.schedule[m - 1];
+            savedRata = baseRow ? baseRow.instalment : 0;
+            sumInvestmentsW2 += savedRata;
+        }
+        
+        v_overpay = v_overpay * (1 + monthlyRate) + savedRata;
+
+        history_inv.push(Math.round(v_inv));
+        history_overpay.push(Math.round(v_overpay));
+        
+        // Etykiety osi X
+        labels.push(overpaidRow ? overpaidRow.monthLabel : (baseCalc.schedule[m - 1] ? baseCalc.schedule[m - 1].monthLabel : `M-${m}`));
+    }
+
+    // Wyświetlenie wyników
+    renderInvestmentResults(v_inv, v_overpay, sumOverpaymentsW1, sumInvestmentsW2, T, T_nadp, annualReturn, useBelka);
+    
+    const chartSection = document.getElementById('investment-chart-section');
+    if (sumOverpaymentsW1 > 0) {
+        if (chartSection) chartSection.style.display = '';
+        renderInvestmentChart(labels, history_inv, history_overpay);
+    } else {
+        if (chartSection) chartSection.style.display = 'none';
+        if (investmentChartInstance) {
+            investmentChartInstance.destroy();
+            investmentChartInstance = null;
+        }
+    }
+
+    // Pokazanie panelu
+    if (els.investmentResultsWrapper && !shouldPreventScroll) {
+        els.investmentResultsWrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    if (!shouldPreventScroll) {
+        showToast('Analiza inwestycyjna zakończona sukcesem!', 'success');
+    }
+}
+
+function renderInvestmentResults(v_inv, v_overpay, sumOverpayments, sumInvestmentsW2, T, T_nadp, annualReturn, useBelka) {
+    const kpisGrid = els.investmentKpisGrid;
+    if (!kpisGrid) return;
+
+    // Rekomendacja doradcza
+    const recBox = els.investmentRecBox;
+    const recTitle = els.investmentRecTitle;
+    const recText = els.investmentRecText;
+
+    if (sumOverpayments === 0) {
+        if (recBox && recTitle && recText) {
+            recBox.className = "investment-recommendation-box better-overpay";
+            recTitle.innerHTML = `
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.25rem;"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                Wprowadź nadpłaty w pierwszej zakładce
+            `;
+            recText.innerHTML = `
+                Analiza porównuje zysk z nadpłacania kredytu z zyskiem z inwestowania nadpłat. 
+                Przejdź do zakładki <strong>„Kredyt i nadpłaty”</strong> i zdefiniuj kwotę w polu <strong>„Stała kwota nadpłaty”</strong> lub dodaj nadpłaty jednorazowe w harmonogramie. Bez dodatkowych nadpłat zyski w obu wariantach wynoszą 0 PLN.
+            `;
+        }
+        
+        kpisGrid.innerHTML = `
+            <div class="investment-kpi-card worse" style="grid-column: span 3; text-align: center; padding: 2rem;">
+                <div style="font-size: 0.9375rem; color: var(--color-text-muted); font-weight: 600;">
+                    Zdefiniuj kwotę nadpłat, aby aktywować analizę porównawczą.
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    const diff = v_overpay - v_inv;
+    const isOverpayBetter = diff > 0;
+    
+    kpisGrid.innerHTML = `
+        <div class="investment-kpi-card ${!isOverpayBetter ? 'better' : 'worse'}">
+            <div class="investment-kpi-label">Wariant A: Tylko Inwestowanie</div>
+            <div class="investment-kpi-value">${formatPLN(v_inv)}</div>
+            <div class="investment-kpi-desc">
+                Wartość portfela na koniec spłaty kredytu (${T} mies.), przy regularnym inwestowaniu nadpłat na ${annualReturn}% rocznie ${useBelka ? 'po opodatkowaniu' : ''}.
+                <br><strong>Wpłacony kapitał:</strong> ${formatPLN(sumOverpayments)}
+            </div>
+        </div>
+
+        <div class="investment-kpi-card ${isOverpayBetter ? 'better' : 'worse'}">
+            <div class="investment-kpi-label">Wariant B: Nadpłacanie kredytu</div>
+            <div class="investment-kpi-value">${formatPLN(v_overpay)}</div>
+            <div class="investment-kpi-desc">
+                Wartość portfela na koniec spłaty (${T} mies.), przy wcześniejszej spłacie kredytu w ${T_nadp}. miesiącu i inwestowaniu uwolnionych rat.
+                <br><strong>Zaoszczędzone odsetki:</strong> ${formatPLN(state.activeCalculation.standard.totalInterest - state.activeCalculation.overpaid.totalInterest)}
+            </div>
+        </div>
+
+        <div class="investment-kpi-card result-net">
+            <div class="investment-kpi-label">Różnica Netto (Majątek Końcowy)</div>
+            <div class="investment-kpi-value" style="color: ${isOverpayBetter ? 'var(--color-success)' : 'var(--color-accent)'};">
+                +${formatPLN(Math.abs(diff))}
+            </div>
+            <div class="investment-kpi-desc">
+                O tyle większy majątek zgromadzisz wybierając strategię <strong>${isOverpayBetter ? 'Nadpłacania kredytu (Wariant B)' : 'Inwestowania nadpłat (Wariant A)'}</strong>.
+            </div>
+        </div>
+    `;
+
+    let mortgageRate = 0;
+    if (state.interestType === 'fixed') {
+        mortgageRate = parseFloat(els.fixedRateInput.value) || 0;
+    } else {
+        const margin = parseFloat(els.marginInput.value) || 0;
+        const wibor = parseFloat(els.wiborInput.value) || 0;
+        mortgageRate = margin + wibor;
+    }
+
+    const effectiveReturn = useBelka ? annualReturn * 0.81 : annualReturn;
+
+    if (recBox && recTitle && recText) {
+        recBox.className = `investment-recommendation-box ${isOverpayBetter ? 'better-overpay' : 'better-invest'}`;
+        if (isOverpayBetter) {
+            recTitle.innerHTML = `
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.25rem;"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Rekomendacja: Bardziej opłaca się NADPŁACAĆ KREDYT
+            `;
+            recText.innerHTML = `
+                <div class="rec-simple-comparison">
+                    <div class="rec-comparison-item">
+                        <span class="label">Koszt Twojego kredytu:</span>
+                        <span class="value value-danger">${mortgageRate.toFixed(2)}% rocznie</span>
+                    </div>
+                    <div class="rec-comparison-item-vs">vs</div>
+                    <div class="rec-comparison-item">
+                        <span class="label">Zysk z Twojej inwestycji:</span>
+                        <span class="value value-success">${effectiveReturn.toFixed(2)}% rocznie ${useBelka ? '<small>(po podatku Belki)</small>' : ''}</span>
+                    </div>
+                </div>
+                <p style="margin-top: 0.75rem; font-size: 0.875rem; line-height: 1.5; color: var(--color-text-main);">
+                    <strong>Dlaczego?</strong> Oprocentowanie kredytu (<strong>${mortgageRate.toFixed(2)}%</strong>) jest wyższe niż zysk z inwestycji po odliczeniu podatków (<strong>${effectiveReturn.toFixed(2)}%</strong>). 
+                    Każda nadpłata daje Ci pewne, gwarantowane ominięcie odsetek bankowych o stopie <strong>${mortgageRate.toFixed(2)}%</strong>, co opłaca się bardziej niż odkładanie tych pieniędzy na niższy procent.
+                    <br><br>
+                    Wybierając **nadpłacanie kredytu**, zyskasz dodatkowo <strong>${formatPLN(diff)}</strong> na czysto w porównaniu do inwestowania. 
+                    Kredyt spłacisz całkowicie już w <strong>${T_nadp}. miesiącu</strong> (szybciej o <strong>${T - T_nadp} miesięcy</strong> / <strong>${Math.floor((T - T_nadp)/12)} lat</strong>).
+                </p>
+            `;
+        } else {
+            recTitle.innerHTML = `
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.25rem;"><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                Rekomendacja: Bardziej opłaca się INWESTOWAĆ NADPŁATY
+            `;
+            recText.innerHTML = `
+                <div class="rec-simple-comparison">
+                    <div class="rec-comparison-item">
+                        <span class="label">Koszt Twojego kredytu:</span>
+                        <span class="value value-danger">${mortgageRate.toFixed(2)}% rocznie</span>
+                    </div>
+                    <div class="rec-comparison-item-vs">vs</div>
+                    <div class="rec-comparison-item">
+                        <span class="label">Zysk z Twojej inwestycji:</span>
+                        <span class="value value-success">${effectiveReturn.toFixed(2)}% rocznie ${useBelka ? '<small>(po podatku Belki)</small>' : ''}</span>
+                    </div>
+                </div>
+                <p style="margin-top: 0.75rem; font-size: 0.875rem; line-height: 1.5; color: var(--color-text-main);">
+                    <strong>Dlaczego?</strong> Realny zysk z inwestycji (<strong>${effectiveReturn.toFixed(2)}%</strong>) jest wyższy niż koszt Twojego kredytu (<strong>${mortgageRate.toFixed(2)}%</strong>). 
+                    Twoje pieniądze będą pracowały na wyższy procent, niż wynosi koszt długu w banku.
+                    <br><br>
+                    Inwestując te środki, na koniec nominalnego okresu kredytu (<strong>${T} miesięcy</strong>) zgromadzisz portfel o wartości <strong>${formatPLN(v_inv)}</strong>. 
+                    To aż o <strong>${formatPLN(Math.abs(diff))}</strong> więcej na czysto, niż gdybyś przeznaczył te same pieniądze na wcześniejszą spłatę banku.
+                    <br><br>
+                    <small style="color: var(--color-text-muted);">Uwaga: Oszczędność na odsetkach z nadpłaty kredytu jest gwarantowana i wolna od ryzyka. Inwestycje giełdowe lub fundusze wiążą się z ryzykiem wahań rynkowych.</small>
+                </p>
+            `;
+        }
+    }
+}
+
+function renderInvestmentChart(labels, dataInv, dataOverpay) {
+    const canvas = els.investmentCanvas;
+    if (!canvas) return;
+
+    if (investmentChartInstance) {
+        investmentChartInstance.destroy();
+        investmentChartInstance = null;
+    }
+
+    const step = Math.max(1, Math.floor(labels.length / 24)); // Pokaż maksymalnie 24 etykiety
+    const filteredLabels = labels.map((l, idx) => (idx % step === 0 || idx === labels.length - 1) ? l : '');
+
+    investmentChartInstance = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Wariant A: Tylko Inwestowanie (PLN)',
+                    data: dataInv,
+                    borderColor: '#2563EB',
+                    backgroundColor: 'rgba(37, 99, 235, 0.05)',
+                    borderWidth: 2.5,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    fill: true,
+                    tension: 0.2
+                },
+                {
+                    label: 'Wariant B: Nadpłacanie Kredytu (PLN)',
+                    data: dataOverpay,
+                    borderColor: '#10B981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+                    borderWidth: 2.5,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    fill: true,
+                    tension: 0.2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        font: { family: 'Inter', size: 11, weight: '500' },
+                        usePointStyle: true,
+                        boxWidth: 8
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ` ${ctx.dataset.label.split(':')[0]}: ${formatCurrencyValue(ctx.raw)}`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: {
+                        font: { family: 'Inter', size: 10 },
+                        callback: function(value, index) {
+                            return filteredLabels[index];
+                        },
+                        maxRotation: 45,
+                        minRotation: 0
+                    }
+                },
+                y: {
+                    ticks: {
+                        callback: v => formatCurrencyValue(v),
+                        font: { size: 10 }
+                    },
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                }
+            }
+        }
+    });
 }
 

@@ -19,11 +19,19 @@ Projekt został zbudowany z myślą o profesjonalnej estetyce budzącej zaufanie
     *   Wykres skumulowany roczny (koszty kapitałowe, odsetkowe i nadpłaty).
     *   Wykres liniowy porównujący tempo spłaty zadłużenia (porównanie ścieżki z nadpłatami vs. bez nadpłat).
 7.  **Dymki edukacyjne:** Wyjaśnienia pojęć finansowych (WIBOR, marża, kapitał) po najechaniu na ikonę informacyjną `(i)`.
-8.  **Stres-Test Stóp Procentowych (Symulacja Scenariuszy Skrajnych):**
-    *   Uruchamianie symulacji wpływu wahań stóp procentowych na wysokość rat i sumaryczne koszty kredytu.
-    *   Dynamiczny harmonogram stóp: Użytkownik może samodzielnie zdefiniować planowane zmiany stawek WIBOR w konkretnych latach.
-    *   Prezentacja wyników za pomocą czytelnego wykresu porównawczego (Chart.js) oraz panelu kart scenariuszy (Base, +1 p.p., +2 p.p., +3 p.p., -1 p.p. oraz Harmonogram dynamiczny).
+8.  **Analiza Wpływu Zmiany Wskaźnika (Symulacja Scenariuszy):**
+    *   Automatyczne (reaktywne) wyliczanie wpływu wahań stóp procentowych i wskaźników referencyjnych na wysokość rat i sumaryczne koszty kredytu bezpośrednio po zmianie parametrów w pierwszej zakładce.
+    *   Prezentacja wyników za pomocą czytelnego wykresu porównawczego (Chart.js) oraz panelu kart scenariuszy (Base, +1 p.p., +2 p.p., +3 p.p., -1 p.p.).
     *   Wskaźnik wrażliwości budżetu na zmianę stóp o każdy 1 p.p.
+9.  **Analiza Inwestycyjna (Inwestowanie vs. Nadpłacanie):**
+    *   Matematyczne porównanie opłacalności nadpłacania kredytu (z oszczędnością odsetek) z alternatywnym inwestowaniem tych samych środków (np. obligacje, lokaty, fundusze ETF) na oczekiwany roczny procent składany.
+    *   Automatyczne uwzględnienie 19% podatku Belki (od zysków kapitałowych w Polsce) po włączeniu dedykowanej opcji.
+    *   Prezentacja wyników majątku netto na koniec spłaty kredytu oraz wykres liniowy przedstawiający wzrost kapitału w czasie dla obu strategii.
+    *   Automatycznie generowana pisemna rekomendacja finansowa z czytelnym zestawieniem stóp procentowych dla laika (Koszt kredytu vs Realny zysk z lokaty) oraz wyliczeniem czystej korzyści majątkowej (różnica netto jako zawsze dodatnia wartość ze znakiem `+`).
+    *   Wbudowany mechanizm wykrywania braku nadpłat z czytelnym komunikatem zachęcającym do ich zdefiniowania.
+10. **Porządkujący System Zakładek (Sidebar Tabs):**
+    *   Sidebar podzielony na trzy przejrzyste karty: *Kredyt i nadpłaty*, *Wpływ zmiany wskaźnika* oraz *Analiza inwestycyjna*.
+    *   Płynne przełączanie widoków bez utraty wpisanych parametrów, z ciemniejszym wyróżnieniem aktywnej zakładki dla lepszej czytelności.
 
 ---
 
@@ -42,7 +50,9 @@ mój-kalkulator-kredytowy/
 │   ├── calculator.css         # Style formularzy wejściowych, suwaków i przełączników
 │   ├── dashboard.css          # Style paneli KPI, paska podziału kapitał/odsetki
 │   ├── schedule.css           # Stylizacja tabeli amortyzacyjnej, paginacji i modali
-│   └── stress-test.css        # [NOWY] Style dla modułu stres-testów stóp procentowych
+│   ├── stress-test.css        # Style dla modułu stres-testów stóp procentowych
+│   ├── tabs.css               # [NOWY] Style dla porządkującego paska zakładek
+│   └── investment.css         # [NOWY] Style dla modułu analizy inwestycyjnej
 └── js/
     ├── app.js                 # [GŁÓWNY] Zunifikowany skrypt całej aplikacji (działa offline i przez file://)
     # Poniższe pliki to oryginalne moduły, zachowane dla czytelności i łatwości utrzymania:
@@ -83,19 +93,23 @@ Aplikacja opiera się na architekturze typu **Zero-Server SPA** – działa w 10
 
 ### 1. Podział i Organizacja Kodu JavaScript (`js/app.js`)
 Główna logika aplikacji została zunifikowana w jednym pliku `js/app.js`, aby wyeliminować blokady CORS w przeglądarkach przy uruchomieniu przez protokół `file://`. Logika ta dzieli się na sekcje:
-*   **Globalny Stan (`state` i `stressState`)**: Przechowuje aktualny tryb oprocentowania, listę zdefiniowanych nadpłat jednorazowych, pobrane stawki WIBOR oraz harmonogram zmian stóp w kolejnych latach dla stres-testu.
+*   **Globalny Stan (`state` i `stressState`)**: Przechowuje aktualny tryb oprocentowania, listę zdefiniowanych nadpłat jednorazowych, pobrane stawki WIBOR, harmonogram zmian stóp w kolejnych latach dla stres-testu oraz parametry analizy inwestycyjnej.
 *   **WIBOR Service**: Pobiera stawki live z GPW Benchmark (przez 3 kaskadowe serwery proxy CORS) z automatycznym fallbackiem offline.
 *   **Silnik Matematyczny (`generateMortgageSchedules`)**: Wylicza harmonogramy spłaty kredytu w dwóch wariantach równolegle (bez nadpłat oraz z nadpłatami) na podstawie wzoru na raty annuitetowe (równe).
-*   **Moduł Stres-Testu**: Uruchamia symulację dla 5 scenariuszy statycznych (bazowy, +1, +2, +3, -1 p.p.) oraz scenariusza dynamicznego. Wylicza ratę oraz skumulowane odsetki dla każdego wariantu i generuje dwuosiowy wykres (Dual-Axis Bar & Line Chart) za pomocą `Chart.js`.
+*   **Moduł Analizy Wpływu Zmiany Wskaźnika**: Uruchamia symulację dla scenariuszy statycznych oraz scenariusza dynamicznego. Wylicza ratę oraz skumulowane odsetki dla każdego wariantu i generuje dwuosiowy wykres.
+*   **Moduł Analizy Inwestycyjnej**: Oblicza porównawczy wzrost majątku netto dla wariantu regularnego inwestowania nadpłat vs. nadpłacania kredytu i późniejszego inwestowania uwolnionych rat.
+*   **System Zakładek (Tabs)**: Kontroluje ukrywanie/pokazywanie odpowiednich sekcji formularza bocznego w zależności od wybranej zakładki bez utraty danych formularza.
 
 ### 2. Rozwiązanie Problemu CORS dla Plików Lokalnych
 Przy próbie wczytania pliku z konfiguracją testową (`js/test-config.json`) przez protokół `file://`, przeglądarki mogą rzucić błąd CORS. Aby przycisk **„⚡ Wczytaj moje dane”** działał zawsze niezawodnie, wdrożono mechanizm awaryjny:
 *   Funkcja `checkAndEnableTestData()` próbuje pobrać plik konfiguracyjny z dysku.
 *   Jeżeli przeglądarka zablokuje zapytanie `fetch()`, kod przechwytuje wyjątek i wstrzykuje do formularza wbudowaną, zapasową konfigurację danych testowych.
 
-### 3. Przepływ Danych w Stres-Teście Dynamicznym
-*   Gdy użytkownik zdefiniuje roczny harmonogram WIBOR, funkcja `runDynamicScenarioCalc()` symuluje spłatę kredytu miesiąc po miesiącu.
-*   Dla każdego miesiąca silnik obliczeniowy sprawdza rok spłaty – jeśli dla tego roku zdefiniowano stawkę w harmonogramie, silnik nadpisuje WIBOR bazowy. Następnie rekalkuluje odsetki oraz wysokość raty (jeżeli włączona jest opcja zmniejszania raty zamiast skracania okresu).
+### 3. Matematyka Porównawcza w Analizie Inwestycyjna
+Analiza inwestycyjna porównuje dwa scenariusze w tym samym horyzoncie czasowym $T$ (nominalny czas spłaty kredytu bez nadpłat):
+*   **Wariant A (Tylko Inwestowanie)**: Płacimy raty kredytu zgodnie z harmonogramem bazowym (bez nadpłat). Kwoty planowanych nadpłat (stałe miesięczne i jednorazowe) są w całości wpłacane na konto inwestycyjne, które rośnie o procent składany (roczna oczekiwana stopa zwrotu $r_{inv}$ pomniejszona o 19% podatku Belki, jeśli włączono). Wartość końcowa portfela to $V_{inv}$.
+*   **Wariant B (Nadpłacanie kredytu)**: Nadpłacamy kredyt zgodnie z planem, spłacając go wcześniej w miesiącu $T_{nadp}$. Od miesiąca $T_{nadp} + 1$ do końca okresu $T$ uwolniona rata kredytu (której nie musimy już płacić bankowi) w całości trafia na konto inwestycyjne z tym samym oprocentowaniem. Wartość końcowa portfela to $V_{overpay}$.
+*   Bezpośrednie porównanie $V_{overpay}$ oraz $V_{inv}$ wskazuje, która strategia jest bardziej opłacalna i o ile PLN zwiększy majątek netto użytkownika na koniec nominalnego okresu spłaty.
 
 ---
 
